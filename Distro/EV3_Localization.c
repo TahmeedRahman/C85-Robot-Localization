@@ -5,7 +5,6 @@
  This file provides the implementation of all the functionality required for the EV3
  robot localization project. Please read through this file carefully, and note the
  sections where you must implement functionality for your bot. 
- 
  You are allowed to change *any part of this file*, not only the sections marked
  ** TO DO **. You are also allowed to add functions as needed (which must also
  be added to the header file). However, *you must clearly document* where you 

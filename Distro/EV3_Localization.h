@@ -69,7 +69,7 @@ code that you have to complete in order to implement the localization algorithms
 #include "./EV3_RobotControl/btcomm.h"
 
 #ifndef HEXKEY
-	#define HEXKEY "00:16:53:56:55:D9"	// <--- SET UP YOUR EV3's HEX ID here
+	#define HEXKEY "00:16:53:55:D2:17"	// <--- SET UP YOUR EV3's HEX ID here
 #endif
 
 int parse_map(unsigned char *map_img, int rx, int ry);
