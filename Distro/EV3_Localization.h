@@ -100,6 +100,6 @@ void calibrate_sensor(void);
 unsigned char *readPPMimage(const char *filename, int *rx, int *ry);
 
 int load_calibration(const char *filename, Calibration calibration[]);
-int read_calibrated_colour(Calibration calibration[], int count);
+int read_calibrated_colour(Calibration calibration[]);
 
 #endif

@@ -355,6 +355,20 @@ int robot_localization(int *robot_x, int *robot_y, int *direction)
      *   TO DO  -   Complete this function
      ***********************************************************************************************************************/
 
+    // asdasd
+    // 17x25
+
+    beliefs[1];
+
+    while (1)
+    {
+        // Drive till we reach a street
+        // Pick a direction and drive till we reach an intersection
+        // Scan all 4 colours on the intersection
+        // Update belief based on findings
+        // Repeat
+    }
+
     // Return an invalid location/direction and notify that localization was unsuccessful (you will delete this and replace it
     // with your code).
     *(robot_x) = -1;
