@@ -70,9 +70,11 @@ code that you have to complete in order to implement the localization algorithms
 #include "./EV3_RobotControl/btcomm.h"
 
 #ifndef HEXKEY
+// TODO: Update this
 #define HEXKEY "00:16:53:56:55:D9" // <--- SET UP YOUR EV3's HEX ID here
 #endif
 
+// TODO: Update this and define ports for other sensors/motors
 #define SENSOR_PORT PORT_1
 
 #define CALIBRATION_SAMPLE_COUNT 10
