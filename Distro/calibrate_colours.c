@@ -56,9 +56,9 @@ int main(void)
 
         fprintf(file, "%s,%.2f,%.2f,%.2f\n",
                 colours[i],
-                (double red_total / CALIBRATION_SAMPLE_COUNT,
-                (double) green_total / CALIBRATION_SAMPLE_COUNT,
-                (double) blue_total / CALIBRATION_SAMPLE_COUNT);
+                (double)red_total / CALIBRATION_SAMPLE_COUNT,
+                (double)green_total / CALIBRATION_SAMPLE_COUNT,
+                (double)blue_total / CALIBRATION_SAMPLE_COUNT);
 
         fflush(file);
 

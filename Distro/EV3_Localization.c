@@ -714,7 +714,7 @@ int load_calibration(const char *filename, Calibration calibration[])
 
     fgets(line, sizeof(line), file);
 
-    while (count < MAX_COLOURS &&
+    while (count < NUM_COLOURS &&
            fgets(line, sizeof(line), file) != NULL)
     {
         if (sscanf(line, "%15[^,],%lf,%lf,%lf",
