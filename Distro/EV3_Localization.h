@@ -83,5 +83,7 @@ void calibrate_sensor(void);
 unsigned char *readPPMimage(const char *filename, int *rx, int*ry);
 //helper
 void print_colour_readings(void);
-int drive_straight_pid(int max_ms, int stop_at_yellow);
+int drive_straight_pid(int max_ms, int stop_at_yellow, int direction);
+int turn_by_gyro(int target_deg);       
+
 #endif

@@ -90,7 +90,7 @@
 #define RIGHT_MOTOR   MOTOR_C
 #define COLOUR_PORT   PORT_1             
 #define GYRO_PORT     PORT_2
-#define BLACK_SUM_MAX  120    
+#define BLACK_SUM_MAX  580    
 #define YELLOW_MIN     300    
 #define RED_MIN        300
 
@@ -101,6 +101,10 @@
 #define LOOP_MS      50
 #define I_LIMIT      20.0
 #define GYRO_SIGN    1    
+
+// Turning 
+#define BACKUP_MS 600
+#define OVERSHOOT 5
 
 
 int map[400][4];            // This holds the representation of the map, up to 20x20
@@ -186,9 +190,19 @@ int main(int argc, char *argv[])
  }
 
  fprintf(stderr,"All set, ready to go!\n");
- //drive_straight_pid(10000, 0);
- //print_colour_readings();
- drive_along_street();
+  //drive_straight_pid(1000, 0, 1);
+
+  // int status = drive_along_street();
+  // if(status == 1){
+  //     drive_straight_pid(300, 0, 1);
+  //     turn_by_gyro(360);
+  //     drive_straight_pid(450, 0, -1);
+  // }  
+  turn_by_gyro(180);
+//  print_colour_readings();
+//  //drive_along_street();
+  
+
 /*******************************************************************************************************************************
  *
  *  TO DO - Implement the main localization loop, this loop will have the robot explore the map, scanning intersections and
@@ -237,11 +251,13 @@ int main(int argc, char *argv[])
 
 // Helper function to get color from sensor reading
 
-int classify_colour(int R, int G, int B)
+int classify_colour(int R, int G, int B, int A)
 {
- if (R+G+B < BLACK_SUM_MAX) return(1);                         // black
+ if (A < 5 && (R+G+B)<BLACK_SUM_MAX) return(1);                         // black
  if (R>YELLOW_MIN && G>YELLOW_MIN && B < 0.6*(R<G?R:G)) return(4);   // yellow: R,G high, B low
  if (R>RED_MIN && G < 0.5*R && B < 0.5*R) return(5);           // red: R high, G,B low
+ if( G>R && G>B && A<3) return(6); //green
+if( B>R && B>G && A<3) return(7); //green
  return(0);                                                    // anything else: unknown
 }
 
@@ -251,20 +267,41 @@ void print_colour_readings(void)
  for (int i=0; i<200; i++)
  {
   if (BT_read_colour_RGBraw_NXT(COLOUR_PORT,&R,&G,&B,&A)==1)
-   printf("R=%4d G=%4d B=%4d A=%4d -> colour index %d\n",R,G,B,A,classify_colour(R,G,B));
+   printf("R=%4d G=%4d B=%4d A=%4d -> colour index %d\n",R,G,B,A,classify_colour(R,G,B,A));
   usleep(100000);
  }
 }
 
+
+// Turning to target degree helper
+int turn_by_gyro(int target_deg)       
+{
+ int angle=0, rate=0;
+ int dir=(target_deg>0)?1:-1;
+ BT_all_stop(0);
+ usleep(500000);
+ if (BT_read_gyro(GYRO_PORT,1,&angle,&rate)!=1) return(-1);
+ for (int i=0; i<200; i++)             
+ {
+  if (BT_read_gyro(GYRO_PORT,0,&angle,&rate)!=1) {BT_all_stop(1); return(-1);}
+  if (dir*GYRO_SIGN*angle >= abs(target_deg)-OVERSHOOT) break;
+  BT_turn(LEFT_MOTOR,dir*25,RIGHT_MOTOR,-dir*25);
+ }
+ BT_all_stop(1);
+ return(0);
+}
+
+
 // Helper PID Controller
 
-int drive_straight_pid(int max_ms, int stop_at_yellow)
+int drive_straight_pid(int max_ms, int stop_at_yellow, int direction)
 {
  int angle=0, rate=0, R,G,B,A;
  int yellow_hits=0;
  double integral=0, u;
  int lp, rp;
  int max_loops=max_ms/LOOP_MS;
+ int base = direction * BASE_POWER;
 
  BT_all_stop(0);
  usleep(500000);
@@ -275,29 +312,32 @@ int drive_straight_pid(int max_ms, int stop_at_yellow)
   if (BT_read_gyro(GYRO_PORT,0,&angle,&rate)!=1) {BT_all_stop(1); return(-1);}
 
   double err=GYRO_SIGN*angle;
-  integral+=err;                                   // no dt: one unit per loop
+  integral+=err;                                   
   if (integral> I_LIMIT) integral= I_LIMIT;
   if (integral<-I_LIMIT) integral=-I_LIMIT;
 
   u=KP*err+KI*integral+KD*GYRO_SIGN*rate;
-
-  lp=(int)(BASE_POWER-u);
-  rp=(int)(BASE_POWER+u);
-  if (lp>100) lp=100; if (lp<-100) lp=-100;
-  if (rp>100) rp=100; if (rp<-100) rp=-100;
+  lp=(int)(base-u);
+  rp=(int)(base+u);
+  if (lp>100) lp=100; 
+  if (lp<-100) lp=-100;
+  if (rp>100) rp=100; 
+  if (rp<-100) rp=-100;
+  printf("Base Power: %d, lp: %d, rp: %d\n", base, lp, rp);
   BT_turn(LEFT_MOTOR,lp,RIGHT_MOTOR,rp);
 
   if (stop_at_yellow)
   {
    if (BT_read_colour_RGBraw_NXT(COLOUR_PORT,&R,&G,&B,&A)==1)
    {
-    int c=classify_colour(R,G,B);
+    int c=classify_colour(R,G,B,A);
     if (c==5) {BT_all_stop(1); return(2);}
-    if (c==4) yellow_hits++; else yellow_hits=0;
+    if (c==4) yellow_hits++; 
+    else yellow_hits=0;
     if (yellow_hits>=2) {BT_all_stop(1); return(1);}
    }
   }
-  usleep(10000);                                   // short pause so the loop isn't flooding the brick
+  usleep(10000);                                  
  }
  BT_all_stop(1);
  return(0);
@@ -315,6 +355,7 @@ int find_street(void)
   return(0);
 }
 
+
 int drive_along_street(void)
 {
  /*
@@ -328,16 +369,16 @@ int drive_along_street(void)
   * You can use the return value to indicate success or failure, or to inform the rest of your code of the state of your
   * bot after calling this function.
   */   
-  int color = drive_straight_pid(1000,1);
-  while(color==0){
-    printf("Still driving on the black line\n");
-    color=drive_straight_pid(1000,1);
-    if(color==2){
-    BT_drive(LEFT_MOTOR, RIGHT_MOTOR,-30);
-    usleep(10000);
-    BT_all_stop(1);
+  int status=drive_straight_pid(15000,1,1);     
+
+  if (status==2)                                 
+  {
+    drive_straight_pid(BACKUP_MS,0,-1);           
+    turn_by_gyro(180);
+    return(2);                                    
   }
-  }
+ return(status); 
+  
   
 }
 
