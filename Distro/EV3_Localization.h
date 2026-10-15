@@ -81,6 +81,8 @@ code that you have to complete in order to implement the localization algorithms
 #define CALIBRATION_OUTPUT_FILE "colour_calibration.csv"
 #define NUM_COLOURS 6
 
+#define BELIEF_THRESHOLD 0.4
+
 typedef struct
 {
   char name[16];
@@ -101,5 +103,9 @@ unsigned char *readPPMimage(const char *filename, int *rx, int *ry);
 
 int load_calibration(const char *filename, Calibration calibration[]);
 int read_calibrated_colour(Calibration calibration[]);
+
+void normalize_beliefs(int numIntersections);
+double get_highest_belief_coords(int numIntersections, int *robot_x, int *robot_y, int *direction);
+void rotate_belief_values(int numIntersections, int angle);
 
 #endif

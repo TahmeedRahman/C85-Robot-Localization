@@ -173,6 +173,9 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
+    // Temp logging
+    fprintf(stderr, "Map size: %d, %d \n", sx, sy);
+
     fprintf(stderr, "All set, ready to go!\n");
 
     /*******************************************************************************************************************************
@@ -355,17 +358,50 @@ int robot_localization(int *robot_x, int *robot_y, int *direction)
      *   TO DO  -   Complete this function
      ***********************************************************************************************************************/
 
-    // asdasd
-    // 17x25
+    // Could just move this into the fns themselves to avoid having this paassed in as a param so often, idk
+    int numIntersections = sx * sy;
 
-    beliefs[1];
+    // Drive till we reach a street
+    find_street();
 
     while (1)
     {
-        // Drive till we reach a street
+        int topLeft, topRight, backRight, backLeft;
+
         // Pick a direction and drive till we reach an intersection
+        // This method should be able to turn around once we hit a wall
+        // Also needs some sort of logic to avoid back and forth loops
+        // This should also return some int (1 or 0) if the robot turned (return the angle ig, so w can if statement on it). This will be used to adjust belief values
+        int angleRotated = drive_along_street();
+
+        // Turning logic should probably go before scanning intersections, return after
+        // Case: turned 90 degrees
+        // Case: turned 180 degrees
+        // Update beliefs accordingly
+        if (angleRotated)
+        {
+            rotate_belief_values(numIntersections, angleRotated);
+        }
+
         // Scan all 4 colours on the intersection
+        scan_intersection(&topLeft, &topRight, &backRight, &backLeft);
+
         // Update belief based on findings
+
+        // Update beliefs based on values from scanned intersections
+
+        // Tricky
+
+        normalize_beliefs(numIntersections);
+
+        double highestBelief = get_highest_belief_coords(numIntersections, robot_x, robot_y, direction);
+        // Return when we obtain a belief higher than BELIEF_THRESHOLD. This will be our localized coordinates/direction
+        if (highestBelief > BELIEF_THRESHOLD)
+        {
+            // Pointer values robot_x, robot_y, and direction are already updated by highestBelief
+            return 0;
+        }
+
         // Repeat
     }
 
@@ -759,18 +795,18 @@ int read_calibrated_colour(Calibration calibration[])
     int rgb[3];
     BT_read_colour_sensor_RGB(SENSOR_PORT, rgb);
 
-    double min_distance = -1;
-    int closest_colour = 0;
+    double minDistance = -1;
+    int closestColour = 0;
 
     for (int i = 0; i < NUM_COLOURS; i++)
     {
         // Calculate Normalized Eucliduan distance between points to compare colours and find best match
-        double sensor_sum = rgb[0] + rgb[1] + rgb[2];
-        double calibration_sum = calibration[i].red + calibration[i].green + calibration[i].blue;
+        double sensorSum = rgb[0] + rgb[1] + rgb[2];
+        double calibratedSum = calibration[i].red + calibration[i].green + calibration[i].blue;
 
-        double dr = (double)rgb[0] / sensor_sum - (double)calibration[i].red / calibration_sum;
-        double dg = (double)rgb[1] / sensor_sum - (double)calibration[i].green / calibration_sum;
-        double db = (double)rgb[2] / sensor_sum - (double)calibration[i].blue / calibration_sum;
+        double dr = (double)rgb[0] / sensorSum - (double)calibration[i].red / calibratedSum;
+        double dg = (double)rgb[1] / sensorSum - (double)calibration[i].green / calibratedSum;
+        double db = (double)rgb[2] / sensorSum - (double)calibration[i].blue / calibratedSum;
 
         double distance = dr * dr + dg * dg + db * db;
 
@@ -790,12 +826,69 @@ int read_calibrated_colour(Calibration calibration[])
         else
             continue;
 
-        if (min_distance < 0 || distance < min_distance)
+        if (minDistance < 0 || distance < minDistance)
         {
-            min_distance = distance;
-            closest_colour = colour;
+            minDistance = distance;
+            closestColour = colour;
         }
     }
 
-    return closest_colour;
+    return closestColour;
+}
+
+// Normalize values in beliefs[400][4]. numIntersections represents sx * sy
+void normalize_beliefs(int numIntersections)
+{
+    double sum = 0;
+
+    for (int i = 0; i < numIntersections; i++)
+    {
+        for (int j = 0; j < 4; j++)
+        {
+            sum += beliefs[i][j];
+        }
+    }
+
+    for (int i = 0; i < numIntersections; i++)
+    {
+        for (int j = 0; j < 4; j++)
+        {
+            beliefs[i][j] /= sum;
+        }
+    }
+}
+
+// Get coordinates (x, y and direction) of the highest belief value in beliefs[400][4]. Also return highest found belief value. numIntersections represents sx * sy
+double get_highest_belief_coords(int numIntersections, int *robot_x, int *robot_y, int *direction)
+{
+    double highest = beliefs[0][0];
+
+    for (int i = 0; i < numIntersections; i++)
+    {
+        for (int j = 0; j < 4; j++)
+        {
+            if (beliefs[i][j] > highest)
+            {
+                highest = beliefs[i][j];
+
+                *robot_x = i % sx;
+                *robot_y = i / sx;
+                *direction = j;
+            }
+        }
+    }
+
+    return highest;
+}
+
+void rotate_belief_values(int numIntersections, int angle)
+{
+    // TODO:
+    // Swap all 4 of these values for every intersection in the beliefs array
+    beliefs[0][0];
+    beliefs[0][1];
+    beliefs[0][2];
+    beliefs[0][3];
+
+    return;
 }
