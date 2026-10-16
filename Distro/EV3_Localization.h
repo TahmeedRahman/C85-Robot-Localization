@@ -58,7 +58,6 @@ code that you have to complete in order to implement the localization algorithms
 
 */
 
-
 #ifndef __localization_header
 #define __localization_header
 
@@ -71,7 +70,6 @@ code that you have to complete in order to implement the localization algorithms
 #include "./EV3_RobotControl/btcomm.h"
 
 #ifndef HEXKEY
-// TODO: Update this
 #define HEXKEY "00:16:53:55:D2:17" // <--- SET UP YOUR EV3's HEX ID here
 #endif
 
@@ -100,8 +98,10 @@ int drive_along_street(void);
 int scan_intersection(int *tl, int *tr, int *br, int *bl);
 int turn_at_intersection(int turn_direction);
 void calibrate_sensor(void);
-unsigned char *readPPMimage(const char *filename, int *rx, int*ry);
-//helper
+unsigned char *readPPMimage(const char *filename, int *rx, int *ry);
+
+// Custom Helper Functions
+
 void print_colour_readings(void);
 int drive_straight_pid(int max_ms, int stop_at_yellow, int direction);
 int turn_by_gyro(int target_deg);
@@ -111,6 +111,6 @@ int read_calibrated_colour(Calibration calibration[]);
 
 void normalize_beliefs(int numIntersections);
 double get_highest_belief_coords(int numIntersections, int *robot_x, int *robot_y, int *direction);
-void rotate_belief_values(int numIntersections, int angle);
+void rotate_beliefs(int numIntersections, int angle);
 
 #endif

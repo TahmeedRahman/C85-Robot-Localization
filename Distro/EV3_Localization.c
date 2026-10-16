@@ -148,6 +148,10 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Unable to load colour calibration\n");
         exit(1);
     }
+    else if (calibration_count == -1)
+    {
+        // Optional, make some sort of fallback to not use read_calibrated_colour
+    }
 
     // Your code for reading any calibration information should not go below this line //
 
@@ -534,25 +538,19 @@ int robot_localization(int *robot_x, int *robot_y, int *direction)
         // Pick a direction and drive till we reach an intersection
         // This method should be able to turn around once we hit a wall
         // Also needs some sort of logic to avoid back and forth loops
-        // This should also return some int (1 or 0) if the robot turned (return the angle ig, so w can if statement on it). This will be used to adjust belief values
+        // This should also return some int (1 or 0) if the robot turned (return the angle ig, so we can if statement on it). This will be used to adjust belief values
         int angleRotated = drive_along_street();
 
-        // Turning logic should probably go before scanning intersections, return after
-        // Case: turned 90 degrees
-        // Case: turned 180 degrees
-        // Update beliefs accordingly
         if (angleRotated)
         {
-            rotate_belief_values(numIntersections, angleRotated);
+            // Rotate belief values by angleRotated if the robot has changed direction while driving
+            rotate_beliefs(numIntersections, angleRotated);
         }
 
         // Scan all 4 colours on the intersection
         scan_intersection(&topLeft, &topRight, &backRight, &backLeft);
 
-        // Update belief based on findings
-
-        // Update beliefs based on values from scanned intersections
-
+        // TODO: Update beliefs based on values from scanned intersections
         // Tricky
 
         normalize_beliefs(numIntersections);
@@ -562,17 +560,13 @@ int robot_localization(int *robot_x, int *robot_y, int *direction)
         if (highestBelief > BELIEF_THRESHOLD)
         {
             // Pointer values robot_x, robot_y, and direction are already updated by highestBelief
-            return 0;
+            return 1;
         }
 
         // Repeat
     }
 
-    // Return an invalid location/direction and notify that localization was unsuccessful (you will delete this and replace it
-    // with your code).
-    *(robot_x) = -1;
-    *(robot_y) = -1;
-    *(direction) = -1;
+    // We should not end up here
     return (0);
 }
 
@@ -920,7 +914,10 @@ int load_calibration(const char *filename, Calibration calibration[])
 {
     FILE *file = fopen(filename, "r");
     if (file == NULL)
-        return 0;
+    {
+        fprintf(stderr, "Cannot find calibration file %s \n", filename);
+        return -1;
+    }
 
     char line[128];
     int count = 0;
@@ -1044,14 +1041,31 @@ double get_highest_belief_coords(int numIntersections, int *robot_x, int *robot_
     return highest;
 }
 
-void rotate_belief_values(int numIntersections, int angle)
+// Rotate belief values by x degrees. Parameter angle must be the angle in degrees to rotate (+/-)
+void rotate_beliefs(int numIntersections, int angle)
 {
-    // TODO:
-    // Swap all 4 of these values for every intersection in the beliefs array
-    beliefs[0][0];
-    beliefs[0][1];
-    beliefs[0][2];
-    beliefs[0][3];
+    // Convert angle into positive number
+    int indexesToRotate = (angle / 90 + 4) % 4;
 
-    return;
+    if (!indexesToRotate)
+    {
+        return;
+    }
+
+    for (int i = 0; i < numIntersections; i++)
+    {
+        double tempValues[4];
+
+        for (int d = 0; d < 4; d++)
+        {
+            // Keep track of temp values, but rotated by indexesToRotate
+            tempValues[(d + indexesToRotate) % 4] = beliefs[i][d];
+        }
+
+        for (int d = 0; d < 4; d++)
+        {
+            // Copy over temp values to beliefs array
+            beliefs[i][d] = tempValues[d];
+        }
+    }
 }
