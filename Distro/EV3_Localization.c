@@ -177,14 +177,7 @@ int main(int argc, char *argv[])
     }
 
     // Initialize beliefs - uniform probability for each location and direction
-    for (int j = 0; j < sy; j++)
-        for (int i = 0; i < sx; i++)
-        {
-            beliefs[i + (j * sx)][0] = 1.0 / (double)(sx * sy * 4);
-            beliefs[i + (j * sx)][1] = 1.0 / (double)(sx * sy * 4);
-            beliefs[i + (j * sx)][2] = 1.0 / (double)(sx * sy * 4);
-            beliefs[i + (j * sx)][3] = 1.0 / (double)(sx * sy * 4);
-        }
+    initializeBeliefs(beliefs);
 
     // Open a socket to the EV3 for remote controlling the bot.
     if (BT_open(HEXKEY) != 0)
@@ -407,6 +400,13 @@ int drive_along_street(void)
      * You can use the return value to indicate success or failure, or to inform the rest of your code of the state of your
      * bot after calling this function.
      */
+
+    // TODO: Pick a direction and drive till we reach an intersection. We must only end up at adjacent intersections
+    // Return the *final* angle turned by the robot from the starting position (degrees). This value should be a multiple of 90 (+/-)
+
+    // This method should be able to turn around if we hit a wall. We must reach a new intersection (different from the one we started at) to continue
+    // Perferably also some sort of logic to prevent loops (being stuck going back and forth the same x intersections/walls)
+
     int status = drive_straight_pid(15000, 1, 1);
 
     if (status == 2)
@@ -447,6 +447,10 @@ int scan_intersection(int *tl, int *tr, int *br, int *bl)
     /************************************************************************************************************************
      *   TO DO  -   Complete this function
      ***********************************************************************************************************************/
+
+    // TODO: Scan all 4 buildings at an intersection and update respective pointers with colour mapping (read_calibrated_colour)
+    // Assume we are alraedy at the intersection when running this method
+    // The robot should return to the same starting location + direction after running
 
     // Return invalid colour values, and a zero to indicate failure (you will replace this with your code)
     *(tl) = -1;
@@ -539,7 +543,10 @@ int robot_localization(int *robot_x, int *robot_y, int *direction)
         // This method should be able to turn around once we hit a wall
         // Also needs some sort of logic to avoid back and forth loops
         // This should also return some int (1 or 0) if the robot turned (return the angle ig, so we can if statement on it). This will be used to adjust belief values
+        // Also some sort of distance var to shift beliefs up/down/left/right
         int angleRotated = drive_along_street();
+
+        shiftBeliefs(numIntersections);
 
         if (angleRotated)
         {
@@ -550,8 +557,8 @@ int robot_localization(int *robot_x, int *robot_y, int *direction)
         // Scan all 4 colours on the intersection
         scan_intersection(&topLeft, &topRight, &backRight, &backLeft);
 
-        // TODO: Update beliefs based on values from scanned intersections
-        // Tricky
+        // Update beliefs based on values from scanned intersections
+        update_beliefs_based_on_intersection(numIntersections, topLeft, topRight, backRight, backLeft);
 
         normalize_beliefs(numIntersections);
 
@@ -1066,6 +1073,119 @@ void rotate_beliefs(int numIntersections, int angle)
         {
             // Copy over temp values to beliefs array
             beliefs[i][d] = tempValues[d];
+        }
+    }
+}
+
+// Shifts beliefs values 1 unit in every respective direction to account for robot movement
+void shiftBeliefs(int numIntersections)
+{
+    // Initialize temp belief map as small number
+    double tempBeliefs[numIntersections][4];
+    for (int i = 0; i < numIntersections; i++)
+    {
+        for (int d = 0; d < 4; d++)
+        {
+            tempBeliefs[i][d] = 1e-10;
+        }
+    }
+
+    for (int i = 0; i < numIntersections; i++)
+    {
+
+        int x = i % sx;
+        int y = i / sx;
+
+        // Shift up if possible
+        if (y > 0)
+        {
+            tempBeliefs[i - sx][0] += beliefs[i][0];
+        }
+
+        // Shift right if possible
+        if (x < sx - 1)
+        {
+            tempBeliefs[i + 1][1] += beliefs[i][1];
+        }
+
+        // Shift down if possible
+        if (y < sy - 1)
+        {
+            tempBeliefs[i + sx][2] += beliefs[i][2];
+        }
+
+        // Shift left if possible
+        if (x > 0)
+        {
+            tempBeliefs[i - 1][3] += beliefs[i][3];
+        }
+    }
+
+    for (int i = 0; i < numIntersections; i++)
+    {
+        for (int d = 0; d < 4; d++)
+        {
+            // Copy over to new array
+            beliefs[i][d] = tempBeliefs[i][d];
+        }
+    }
+}
+
+// Update beliefs based on data from scanned intersections
+void update_beliefs_based_on_intersection(int numIntersections, int topLeft, int topRight, int backRight, int backLeft)
+{
+    for (int i = 0; i < numIntersections; i++)
+    {
+        // Check all 4 possible rotations of the intersection
+        for (int d = 0; d < 4; d++)
+        {
+            int matches = 0;
+
+            if (map[i][(4 - d) % 4] == topLeft)
+            {
+                matches++;
+            }
+
+            if (map[i][(5 - d) % 4] == topRight)
+            {
+                matches++;
+            }
+
+            if (map[i][(6 - d) % 4] == backRight)
+            {
+                matches++;
+            }
+
+            if (map[i][(7 - d) % 4] == backLeft)
+            {
+                matches++;
+            }
+
+            // If this intersection is exists and the robot is facing the right direction, increase the belief
+            if (matches == 4)
+            {
+                beliefs[i][d] *= 3;
+            }
+            else if (matches == 3)
+            {
+                // Small adjustment in case of sensor error, close enough match
+                beliefs[i][d] *= 1.2;
+            }
+        }
+    }
+}
+
+// Initialize beliefs - Uniform probability for each location and direction
+void initializeBeliefs(double beliefArray[][4])
+{
+    for (int j = 0; j < sy; j++)
+    {
+        for (int i = 0; i < sx; i++)
+        {
+            beliefArray[i + (j * sx)][0] = 1.0 / (double)(sx * sy * 4);
+            beliefArray[i + (j * sx)][1] = 1.0 / (double)(sx * sy * 4);
+            beliefArray[i + (j * sx)][2] = 1.0 / (double)(sx * sy * 4);
+            beliefArray[i + (j * sx)][3] = 1.0 / (double)(sx * sy * 4);
         }
     }
 }

@@ -109,8 +109,11 @@ int turn_by_gyro(int target_deg);
 int load_calibration(const char *filename, Calibration calibration[]);
 int read_calibrated_colour(Calibration calibration[]);
 
+void initializeBeliefs(double beliefArray[][4]);
 void normalize_beliefs(int numIntersections);
 double get_highest_belief_coords(int numIntersections, int *robot_x, int *robot_y, int *direction);
 void rotate_beliefs(int numIntersections, int angle);
+void shiftBeliefs(int numIntersections);
+void update_beliefs_based_on_intersection(int numIntersections, int topLeft, int topRight, int backRight, int backLeft);
 
 #endif
