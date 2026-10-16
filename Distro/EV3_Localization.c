@@ -525,10 +525,6 @@ int robot_localization(int *robot_x, int *robot_y, int *direction)
      *  The function's return value is 1 if localization was successful, and 0 otherwise.
      */
 
-    /************************************************************************************************************************
-     *   TO DO  -   Complete this function
-     ***********************************************************************************************************************/
-
     // Could just move this into the fns themselves to avoid having this paassed in as a param so often, idk
     int numIntersections = sx * sy;
 
@@ -539,11 +535,7 @@ int robot_localization(int *robot_x, int *robot_y, int *direction)
     {
         int topLeft, topRight, backRight, backLeft;
 
-        // Pick a direction and drive till we reach an intersection
-        // This method should be able to turn around once we hit a wall
-        // Also needs some sort of logic to avoid back and forth loops
-        // This should also return some int (1 or 0) if the robot turned (return the angle ig, so we can if statement on it). This will be used to adjust belief values
-        // Also some sort of distance var to shift beliefs up/down/left/right
+        // Drive to the next intersection available
         int angleRotated = drive_along_street();
 
         shiftBeliefs(numIntersections);
