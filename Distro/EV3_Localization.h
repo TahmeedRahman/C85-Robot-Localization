@@ -58,6 +58,7 @@ code that you have to complete in order to implement the localization algorithms
 
 */
 
+
 #ifndef __localization_header
 #define __localization_header
 
@@ -71,7 +72,7 @@ code that you have to complete in order to implement the localization algorithms
 
 #ifndef HEXKEY
 // TODO: Update this
-#define HEXKEY "00:16:53:56:55:D9" // <--- SET UP YOUR EV3's HEX ID here
+#define HEXKEY "00:16:53:55:D2:17" // <--- SET UP YOUR EV3's HEX ID here
 #endif
 
 // TODO: Update this and define ports for other sensors/motors
@@ -99,7 +100,11 @@ int drive_along_street(void);
 int scan_intersection(int *tl, int *tr, int *br, int *bl);
 int turn_at_intersection(int turn_direction);
 void calibrate_sensor(void);
-unsigned char *readPPMimage(const char *filename, int *rx, int *ry);
+unsigned char *readPPMimage(const char *filename, int *rx, int*ry);
+//helper
+void print_colour_readings(void);
+int drive_straight_pid(int max_ms, int stop_at_yellow, int direction);
+int turn_by_gyro(int target_deg);
 
 int load_calibration(const char *filename, Calibration calibration[]);
 int read_calibrated_colour(Calibration calibration[]);
