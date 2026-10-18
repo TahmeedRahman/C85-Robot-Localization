@@ -205,9 +205,9 @@ int main(int argc, char *argv[])
     //     turn_by_gyro(360);
     //     drive_straight_pid(450, 0, -1);
     // }
-    turn_by_gyro(180);
+    //turn_by_gyro(180);
 
-    //  print_colour_readings();
+    print_colour_readings();
     //  //drive_along_street();
 
     /*******************************************************************************************************************************
