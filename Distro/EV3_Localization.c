@@ -104,7 +104,7 @@
 
 // Turning 
 #define BACKUP_MS 600
-#define OVERSHOOT 5
+#define OVERSHOOT 10
 
 
 int map[400][4];            // This holds the representation of the map, up to 20x20
@@ -198,8 +198,8 @@ int main(int argc, char *argv[])
   //     turn_by_gyro(360);
   //     drive_straight_pid(450, 0, -1);
   // }  
-  turn_by_gyro(180);
-//  print_colour_readings();
+  //turn_by_gyro(180);
+  print_colour_readings();
 //  //drive_along_street();
   
 
@@ -256,20 +256,47 @@ int classify_colour(int R, int G, int B, int A)
  if (A < 5 && (R+G+B)<BLACK_SUM_MAX) return(1);                         // black
  if (R>YELLOW_MIN && G>YELLOW_MIN && B < 0.6*(R<G?R:G)) return(4);   // yellow: R,G high, B low
  if (R>RED_MIN && G < 0.5*R && B < 0.5*R) return(5);           // red: R high, G,B low
- if( G>R && G>B && A<3) return(6); //green
-if( B>R && B>G && A<3) return(7); //green
- return(0);                                                    // anything else: unknown
+ if( G>R && G>B && A<3) return(3); //green
+if( B>R && B>G && A<3) return(2); //blue
+ return(6);                                                    // anything else: unknown
 }
 
+/* 1 -  Black
+   2 -  Blue
+   3 -  Green
+   4 -  Yellow
+   5 -  Red
+   6 -  White
+*/
 void print_colour_readings(void)
 {
  int R,G,B,A;
- for (int i=0; i<200; i++)
- {
-  if (BT_read_colour_RGBraw_NXT(COLOUR_PORT,&R,&G,&B,&A)==1)
-   printf("R=%4d G=%4d B=%4d A=%4d -> colour index %d\n",R,G,B,A,classify_colour(R,G,B,A));
-  usleep(100000);
+ int index;
+ char *color;
+ int HR=0, HB=0, HG=0, HA=0;
+ for (int i=0; i<200; i++){
+  if (BT_read_colour_RGBraw_NXT(COLOUR_PORT,&R,&G,&B,&A)==1){
+    HR = (R > HR) ? R : HR;
+    HB = (B > HB) ? B : HB;
+    HG = (G > HG) ? G : HG;
+    HA = (A > HA) ? A : HA;
+    index = classify_colour(R,G,B,A); 
+    switch (index){
+      case 1: color ="BLACK"; break;
+      case 2: color = "BLUE"; break; 
+      case 3: color = "GREEN"; break; 
+      case 4: color = "YELLOW"; break;
+      case 5: color = "RED"; break;
+      case 6: color = "WHITE"; break;
+      default: break;
+    }
+    printf("R=%4d G=%4d B=%4d A=%4d -> colour index %d\n",R,G,B,A,index);
+    printf("Color Detected: %s\n", color);
+    usleep(100000);
  }
+}
+printf("Highest Values : R=%4d G=%4d B=%4d A=%4d\n",HR,HG,HB,HA);
+
 }
 
 
@@ -278,12 +305,14 @@ int turn_by_gyro(int target_deg)
 {
  int angle=0, rate=0;
  int dir=(target_deg>0)?1:-1;
- BT_all_stop(0);
+ BT_all_stop(1);
  usleep(500000);
  if (BT_read_gyro(GYRO_PORT,1,&angle,&rate)!=1) return(-1);
+ 
  for (int i=0; i<200; i++)             
  {
   if (BT_read_gyro(GYRO_PORT,0,&angle,&rate)!=1) {BT_all_stop(1); return(-1);}
+  printf("Angle: %d, Rate: %d\n", angle, rate);
   if (dir*GYRO_SIGN*angle >= abs(target_deg)-OVERSHOOT) break;
   BT_turn(LEFT_MOTOR,dir*25,RIGHT_MOTOR,-dir*25);
  }
@@ -302,6 +331,7 @@ int drive_straight_pid(int max_ms, int stop_at_yellow, int direction)
  int lp, rp;
  int max_loops=max_ms/LOOP_MS;
  int base = direction * BASE_POWER;
+ int c;
 
  BT_all_stop(0);
  usleep(500000);
@@ -326,23 +356,38 @@ int drive_straight_pid(int max_ms, int stop_at_yellow, int direction)
   printf("Base Power: %d, lp: %d, rp: %d\n", base, lp, rp);
   BT_turn(LEFT_MOTOR,lp,RIGHT_MOTOR,rp);
 
+  if (BT_read_colour_RGBraw_NXT(COLOUR_PORT,&R,&G,&B,&A)==1)
+   {
+    c=classify_colour(R,G,B,A);
+    if (c==5) {BT_all_stop(1); return(5);} // Detected RED
+   }
   if (stop_at_yellow)
   {
-   if (BT_read_colour_RGBraw_NXT(COLOUR_PORT,&R,&G,&B,&A)==1)
-   {
-    int c=classify_colour(R,G,B,A);
-    if (c==5) {BT_all_stop(1); return(2);}
     if (c==4) yellow_hits++; 
     else yellow_hits=0;
-    if (yellow_hits>=2) {BT_all_stop(1); return(1);}
-   }
+    if (yellow_hits>=2) {BT_all_stop(1); return(4);} // DETECTED INTERSECTION
+   
   }
   usleep(10000);                                  
  }
  BT_all_stop(1);
  return(0);
 }
+//******************   Sliding sensor mechanish *******************//
 
+// Positions the color sensor in the middle again
+int reset_slider(){
+
+  return 0;
+}
+// Amount is time in ms
+int scan_left(int amount){
+  return 0;
+}
+
+int scan_right(int amount){
+  return 0;
+}
 int find_street(void)   
 {
  /*
@@ -371,7 +416,7 @@ int drive_along_street(void)
   */   
   int status=drive_straight_pid(15000,1,1);     
 
-  if (status==2)                                 
+  if (status==5)                                 
   {
     drive_straight_pid(BACKUP_MS,0,-1);           
     turn_by_gyro(180);
@@ -381,6 +426,7 @@ int drive_along_street(void)
   
   
 }
+
 
 int scan_intersection(int *tl, int *tr, int *br, int *bl)
 {
