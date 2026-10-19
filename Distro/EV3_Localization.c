@@ -86,10 +86,9 @@
 */
 
 #include "EV3_Localization.h"
-#define LEFT_MOTOR MOTOR_B
-#define RIGHT_MOTOR MOTOR_C
-#define COLOUR_PORT PORT_1
-#define GYRO_PORT PORT_2
+
+
+
 #define BLACK_SUM_MAX 580
 #define YELLOW_MIN 300
 #define RED_MIN 300
@@ -105,6 +104,12 @@
 // Turning
 #define BACKUP_MS 600
 #define OVERSHOOT 10
+
+// Slider and touch sensor configuration
+
+//Color Sensor denoising
+#define MAX_SAMPLES 15
+#define STILL_SAMPLES  9
 
 int map[400][4];        // This holds the representation of the map, up to 20x20
                         // intersections, raster ordered, 4 building colours per
@@ -156,22 +161,18 @@ int main(int argc, char *argv[])
     // Your code for reading any calibration information should not go below this line //
 
     map_image = readPPMimage(&mapname[0], &rx, &ry);
+    if (parse_map(map_image, rx, ry) == 0)
+    {
+        fprintf(stderr, "Unable to parse input image map. Make sure the image is properly formatted\n");
+        free(map_image);
+        exit(1);
+    }
+    
     if (map_image == NULL)
     {
         fprintf(stderr, "Unable to open specified map image\n");
         exit(1);
     }
-
-  // int status = drive_along_street();
-  // if(status == 1){
-  //     drive_straight_pid(300, 0, 1);
-  //     turn_by_gyro(360);
-  //     drive_straight_pid(450, 0, -1);
-  // }  
-  //turn_by_gyro(180);
-  print_colour_readings();
-//  //drive_along_street();
-  
 
     if (dest_x < 0 || dest_x >= sx || dest_y < 0 || dest_y >= sy)
     {
@@ -205,10 +206,11 @@ int main(int argc, char *argv[])
     //     turn_by_gyro(360);
     //     drive_straight_pid(450, 0, -1);
     // }
-    //turn_by_gyro(180);
-
-    print_colour_readings();
+    turn_by_gyro(180);
+    // print_colour_readings();
     //  //drive_along_street();
+    //int top_left, top_right, bottom_right, bottom_left;
+    //scan_intersection(&top_left, &top_right, &bottom_right, &bottom_left);
 
     /*******************************************************************************************************************************
      *
@@ -255,6 +257,27 @@ int main(int argc, char *argv[])
     exit(0);
 }
 
+//###################################  COLOR SENSOR ###################################//
+
+// Denoising for color sensor readings
+
+static int median(const int *v, int n)
+{
+ int tmp[MAX_SAMPLES];
+ for (int i=0; i<n; i++) tmp[i]=v[i];      // copy so the original order is kept
+
+ for (int i=0; i<n-1; i++)                 // simple bubble sort
+  for (int j=0; j<n-1-i; j++)
+   if (tmp[j]>tmp[j+1])                    // regular int comparison
+   {
+    int t=tmp[j];
+    tmp[j]=tmp[j+1];
+    tmp[j+1]=t;
+   }
+
+ return tmp[n/2];                          // middle value
+}
+
 // Helper function to get color from sensor reading
 
 int classify_colour(int R, int G, int B, int A)
@@ -272,6 +295,27 @@ int classify_colour(int R, int G, int B, int A)
   return (6);     // anything else: unknown
 }
 
+// Denoise reading
+int read_colour_still(void)
+{
+ int R[MAX_SAMPLES],G[MAX_SAMPLES],B[MAX_SAMPLES],A[MAX_SAMPLES],cls[MAX_SAMPLES];
+ int r=0,g=0,b=0,a=0,k=0;
+
+ BT_read_colour_RGBraw_NXT(COLOUR_PORT,&r,&g,&b,&a);     // throw away the first read (stale after stopping)
+
+ for (int tries=0; tries<2*STILL_SAMPLES && k<STILL_SAMPLES; tries++)
+ {
+  if (BT_read_colour_RGBraw_NXT(COLOUR_PORT,&r,&g,&b,&a)==1)   // only keep successful reads
+  {
+   R[k]=r; G[k]=g; B[k]=b; A[k]=a;
+   cls[k]=classify_colour(r,g,b,a);
+   k++;
+  }
+ }
+ if (k<3) return(-1);
+ int c=classify_colour(median(R,k),median(G,k),median(B,k),median(A,k));
+ return(c);
+}
 /* 1 -  Black
    2 -  Blue
    3 -  Green
@@ -286,12 +330,14 @@ void print_colour_readings(void)
  char *color;
  int HR=0, HB=0, HG=0, HA=0;
  for (int i=0; i<200; i++){
-  if (BT_read_colour_RGBraw_NXT(COLOUR_PORT,&R,&G,&B,&A)==1){
-    HR = (R > HR) ? R : HR;
-    HB = (B > HB) ? B : HB;
-    HG = (G > HG) ? G : HG;
-    HA = (A > HA) ? A : HA;
-    index = classify_colour(R,G,B,A); 
+  index = read_colour_still();
+  if(index!=-1){
+  // if (BT_read_colour_RGBraw_NXT(COLOUR_PORT,&R,&G,&B,&A)==1){
+  //   HR = (R > HR) ? R : HR;
+  //   HB = (B > HB) ? B : HB;
+  //   HG = (G > HG) ? G : HG;
+  //   HA = (A > HA) ? A : HA;
+    // index = classify_colour(R,G,B,A); 
     switch (index){
       case 1: color ="BLACK"; break;
       case 2: color = "BLUE"; break; 
@@ -301,12 +347,12 @@ void print_colour_readings(void)
       case 6: color = "WHITE"; break;
       default: break;
     }
-    printf("R=%4d G=%4d B=%4d A=%4d -> colour index %d\n",R,G,B,A,index);
+    // printf("R=%4d G=%4d B=%4d A=%4d -> colour index %d\n",R,G,B,A,index);
     printf("Color Detected: %s\n", color);
     usleep(100000);
  }
 }
-printf("Highest Values : R=%4d G=%4d B=%4d A=%4d\n",HR,HG,HB,HA);
+// printf("Highest Values : R=%4d G=%4d B=%4d A=%4d\n",HR,HG,HB,HA);
 
 }
 
@@ -326,6 +372,7 @@ int turn_by_gyro(int target_deg)
             BT_all_stop(1);
             return (-1);
         }
+        printf("Current angle: %d\n, rate: %d\n", angle, rate);
         if (dir * GYRO_SIGN * angle >= abs(target_deg) - OVERSHOOT)
             break;
         BT_turn(LEFT_MOTOR, dir * 25, RIGHT_MOTOR, -dir * 25);
@@ -399,17 +446,31 @@ int drive_straight_pid(int max_ms, int stop_at_yellow, int direction)
 }
 //******************   Sliding sensor mechanish *******************//
 
-// Positions the color sensor in the middle again
-int reset_slider(){
 
-  return 0;
-}
 // Amount is time in ms
-int scan_left(int amount){
-  return 0;
+int scan_left(int us){
+  BT_drive(SLIDE_MOTOR, SLIDE_MOTOR, -90);
+  usleep(us);
+  BT_all_stop(1);
+  int color = read_colour_still();
+  return color;
 }
 
-int scan_right(int amount){
+int scan_right(int us){
+  BT_drive(SLIDE_MOTOR, SLIDE_MOTOR, 90);
+  usleep(us);
+  BT_all_stop(1);
+  int color = read_colour_still();
+  return color;
+}
+// Positions the color sensor in the middle again
+int reset(){
+  while(BT_read_touch_sensor(TOUCH_PORT)==0){
+    BT_drive(SLIDE_MOTOR, SLIDE_MOTOR, -80);
+  }
+  BT_all_stop(1);
+  scan_right(2500);
+  usleep(1000000);
   return 0;
 }
 int find_street(void)   
@@ -487,6 +548,31 @@ int scan_intersection(int *tl, int *tr, int *br, int *bl)
     // The robot should return to the same starting location + direction after running
 
     // Return invalid colour values, and a zero to indicate failure (you will replace this with your code)
+    int color = read_colour_still();
+    if(color == 4){
+        drive_straight_pid(1000000, 0 ,1);
+        usleep(1000000); // sleep for 1 second
+        *(tr) = scan_right(3000000);
+        usleep(1000000); // sleep for 1 second
+        if(scan_left(3000000) != 1){
+            reset();
+        }
+        *(tl) = scan_left(3000000);
+        reset();
+        usleep(1000000); // sleep for 1 second
+        drive_straight_pid(1000000, 0 ,-1);
+        usleep(1000000); // sleep for 1 second
+        *(br) = scan_right(3000000);
+        usleep(1000000); // sleep for 1 second
+        if(scan_left(3000000) != 1){
+            reset();
+        }
+        *(bl) = scan_left(3000000);
+        reset();
+        usleep(1000000); 
+        return 0;
+
+    }
     *(tl) = -1;
     *(tr) = -1;
     *(br) = -1;
@@ -986,7 +1072,7 @@ int load_calibration(const char *filename, Calibration calibration[])
 int read_calibrated_colour(Calibration calibration[])
 {
     int rgb[3];
-    BT_read_colour_sensor_RGB(SENSOR_PORT, rgb);
+    BT_read_colour_sensor_RGB(COLOUR_PORT, rgb);
 
     double minDistance = -1;
     int closestColour = 0;

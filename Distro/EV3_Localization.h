@@ -74,8 +74,13 @@ code that you have to complete in order to implement the localization algorithms
 #endif
 
 // TODO: Update this and define ports for other sensors/motors
-#define SENSOR_PORT PORT_1
-
+#define COLOUR_PORT PORT_1
+#define GYRO_PORT PORT_2
+#define TOUCH_PORT PORT_3
+#define LEFT_MOTOR MOTOR_B
+#define RIGHT_MOTOR MOTOR_C
+#define SLIDE_MOTOR MOTOR_D
+//
 #define CALIBRATION_SAMPLE_COUNT 10
 #define CALIBRATION_OUTPUT_FILE "colour_calibration.csv"
 #define NUM_COLOURS 6
