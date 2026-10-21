@@ -250,6 +250,69 @@ int main(int argc, char *argv[])
 
 // ###################################  COLOR SENSOR ###################################//
 
+// Denoising for color sensor readings
+
+static int median(const int *v, int n)
+{
+    int tmp[MAX_SAMPLES];
+    for (int i = 0; i < n; i++)
+        tmp[i] = v[i]; // copy so the original order is kept
+
+    for (int i = 0; i < n - 1; i++) // simple bubble sort
+        for (int j = 0; j < n - 1 - i; j++)
+            if (tmp[j] > tmp[j + 1]) // regular int comparison
+            {
+                int t = tmp[j];
+                tmp[j] = tmp[j + 1];
+                tmp[j + 1] = t;
+            }
+
+    return tmp[n / 2]; // middle value
+}
+
+// Helper function to get color from sensor reading
+
+int classify_colour(int R, int G, int B, int A)
+{
+    if (A < 5 && (R + G + B) < BLACK_SUM_MAX)
+        return (1); // black
+    if (R > YELLOW_MIN && G > YELLOW_MIN && B < 0.6 * (R < G ? R : G))
+        return (4); // yellow
+    if (R > RED_MIN && G < 0.5 * R && B < 0.5 * R)
+        return (5); // red: R high
+    if (G > R && G > B && A < 3)
+        return (3); // green
+    if (B > R && B > G && A < 3)
+        return (2); // blue
+    return (6);     // anything else: unknown
+}
+
+// Denoise reading
+int read_colour_still(void)
+{
+    int R[MAX_SAMPLES], G[MAX_SAMPLES], B[MAX_SAMPLES], A[MAX_SAMPLES], cls[MAX_SAMPLES];
+    int r = 0, g = 0, b = 0, a = 0, k = 0;
+
+    BT_read_colour_RGBraw_NXT(COLOUR_PORT, &r, &g, &b, &a); // throw away the first read (stale after stopping)
+
+    for (int tries = 0; tries < 2 * STILL_SAMPLES && k < STILL_SAMPLES; tries++)
+    {
+        if (BT_read_colour_RGBraw_NXT(COLOUR_PORT, &r, &g, &b, &a) == 1) // only keep successful reads
+        {
+            R[k] = r;
+            G[k] = g;
+            B[k] = b;
+            A[k] = a;
+            cls[k] = classify_colour(r, g, b, a);
+            k++;
+        }
+    }
+    if (k < 3)
+        return (-1);
+    int c = classify_colour(median(R, k), median(G, k), median(B, k), median(A, k));
+    return (c);
+}
+
 void printColourName(int colour)
 {
     switch (colour)
@@ -356,7 +419,7 @@ void drive(int max_ms, int direction)
  */
 int drive_straight_pid(int max_ms, int stop_at_colour, int direction)
 {
-    int angle = 0, rate = 0;
+    int angle = 0, rate = 0, R, G, B, A;
     int colour_hits = 0;
     double integral = 0, u;
     int lp, rp;
@@ -395,17 +458,19 @@ int drive_straight_pid(int max_ms, int stop_at_colour, int direction)
             rp = 100;
         if (rp < -100)
             rp = -100;
-
         printf("Base Power: %d, lp: %d, rp: %d\n", base, lp, rp);
         BT_turn(LEFT_MOTOR, lp, RIGHT_MOTOR, rp);
 
-        c = read_calibrated_colour(calibration);
-
-        // Found red, stop and return
-        if (c == RED)
+        if (BT_read_colour_RGBraw_NXT(COLOUR_PORT, &R, &G, &B, &A) == 1)
         {
-            BT_all_stop(1);
-            return (RED);
+            c = classify_colour(R, G, B, A);
+
+            // Found red, stop and return
+            if (c == RED)
+            {
+                BT_all_stop(1);
+                return (RED);
+            }
         }
 
         // Continue only if we need to stop at a colour (see mapping)
@@ -435,7 +500,7 @@ int scan_left(int us)
     BT_drive(SLIDE_MOTOR, SLIDE_MOTOR, -90);
     usleep(us);
     BT_all_stop(1);
-    int color = read_calibrated_colour(calibration);
+    int color = read_colour_still();
     return color;
 }
 
@@ -444,10 +509,9 @@ int scan_right(int us)
     BT_drive(SLIDE_MOTOR, SLIDE_MOTOR, 90);
     usleep(us);
     BT_all_stop(1);
-    int color = read_calibrated_colour(calibration);
+    int color = read_colour_still();
     return color;
 }
-
 // Positions the color sensor in the middle again
 int reset()
 {
@@ -456,7 +520,8 @@ int reset()
         BT_drive(SLIDE_MOTOR, SLIDE_MOTOR, -80);
     }
     BT_all_stop(1);
-    scan_right(2500);
+    scan_right(2000000);
+    BT_all_stop(1);
     usleep(1000000);
     return 0;
 }
@@ -571,7 +636,7 @@ int drive_along_street(void)
 
 /*
 
-    // Scan all 4 buildings at an intersection and update respective pointers with colour mapping (read_calibrated_colour)
+    // Scan all 4 buildings at an intersection and update respective pointers with colour mapping
     // Assume we are alraedy at the intersection when running this method
     // The robot should return to the same starting location + direction after running
 
@@ -604,42 +669,47 @@ int scan_intersection(int *tl, int *tr, int *br, int *bl)
 
     fprintf(stderr, "Starting intersection scan ...\n");
 
-    int color = read_calibrated_colour(calibration);
+    // Return invalid colour values, and a zero to indicate failure (you will replace this with your code)
+    int color = read_colour_still();
     if (color == 4)
     {
-        drive_straight_pid(1000000, 0, 1);
-
+        // drive forward
+        BT_drive(RIGHT_MOTOR, LEFT_MOTOR, 30);
+        usleep(300000);
+        BT_all_stop(1);
+        // Scan left and right
+        *(tr) = scan_right(2900000);
         usleep(1000000); // sleep for 1 second
-        *(tr) = scan_right(3000000);
+        scan_left(2900000) != 1;
+        *(tl) = scan_left(2200000);
+        // reset();
+        scan_right(2200000);
         usleep(1000000); // sleep for 1 second
 
-        if (scan_left(3000000) != 1)
+        // Back to intersection
+        BT_drive(RIGHT_MOTOR, LEFT_MOTOR, -30);
+        usleep(300000);
+        BT_all_stop(1);
+
+        // drive back
+        BT_drive(RIGHT_MOTOR, LEFT_MOTOR, -30);
+        usleep(300000);
+        BT_all_stop(1);
+        usleep(1000000); // sleep for 1 second
+        *(br) = scan_right(2900000);
+        usleep(1000000); // sleep for 1 second
+        if (scan_left(2900000) != 1)
         {
             reset();
         }
-
-        *(tl) = scan_left(3000000);
-        reset();
-
-        usleep(1000000); // sleep for 1 second
-        drive_straight_pid(1000000, 0, -1);
-        usleep(1000000); // sleep for 1 second
-
-        *(br) = scan_right(3000000);
-        usleep(1000000); // sleep for 1 second
-
-        if (scan_left(3000000) != 1)
-        {
-            reset();
-        }
-
-        *(bl) = scan_left(3000000);
-        reset();
+        *(bl) = scan_left(2200000);
+        scan_right(2200000);
         usleep(1000000);
+        BT_drive(RIGHT_MOTOR, LEFT_MOTOR, 30);
+        usleep(300000);
+        BT_all_stop(1);
 
         fprintf(stderr, "Intersection scanned: TL=%d, TR=%d, BR=%d, BL=%d\n", *tl, *tr, *br, *bl);
-
-        return 1;
     }
     else
     {

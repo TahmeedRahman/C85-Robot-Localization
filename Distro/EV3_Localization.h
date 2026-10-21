@@ -85,6 +85,7 @@ code that you have to complete in order to implement the localization algorithms
 #define NUM_COLOURS 6
 #define AMBIENT_WEIGHT 0.2
 
+// We have localized when a belief value exceeds this threshold
 #define BELIEF_THRESHOLD 0.4
 
 #define BLACK 1
