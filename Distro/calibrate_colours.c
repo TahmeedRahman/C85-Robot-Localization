@@ -45,7 +45,7 @@ int main(void)
 
         for (int j = 0; j < CALIBRATION_SAMPLE_COUNT; j++)
         {
-            BT_read_colour_sensor_RGB(SENSOR_PORT, rgb);
+            BT_read_colour_sensor_RGB(COLOUR_PORT, rgb);
 
             red_total += rgb[0];
             green_total += rgb[1];
