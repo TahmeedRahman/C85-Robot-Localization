@@ -469,7 +469,8 @@ int reset(){
     BT_drive(SLIDE_MOTOR, SLIDE_MOTOR, -80);
   }
   BT_all_stop(1);
-  scan_right(2500);
+  scan_right(2000000);
+  BT_all_stop(1);
   usleep(1000000);
   return 0;
 }
@@ -548,35 +549,48 @@ int scan_intersection(int *tl, int *tr, int *br, int *bl)
     // The robot should return to the same starting location + direction after running
 
     // Return invalid colour values, and a zero to indicate failure (you will replace this with your code)
-    int color = read_colour_still();
+    iint color = read_colour_still();
     if(color == 4){
-        drive_straight_pid(1000000, 0 ,1);
+    //drive forward
+        BT_drive(RIGHT_MOTOR, LEFT_MOTOR, 30);
+        usleep(300000);
+        BT_all_stop(1);
+    // Scan left and right    
+        *(tr) = scan_right(2900000);
         usleep(1000000); // sleep for 1 second
-        *(tr) = scan_right(3000000);
+        scan_left(2900000) != 1;
+        *(tl) = scan_left(2200000);
+        //reset();
+        scan_right(2200000);
         usleep(1000000); // sleep for 1 second
-        if(scan_left(3000000) != 1){
+
+    //Back to intersection
+        BT_drive(RIGHT_MOTOR, LEFT_MOTOR, -30);
+        usleep(300000);
+        BT_all_stop(1);
+
+    //drive back
+        BT_drive(RIGHT_MOTOR, LEFT_MOTOR, -30);
+        usleep(300000);
+        BT_all_stop(1);
+        usleep(1000000); // sleep for 1 second
+        *(br) = scan_right(2900000);
+        usleep(1000000); // sleep for 1 second
+        if(scan_left(2900000) != 1){
             reset();
         }
-        *(tl) = scan_left(3000000);
-        reset();
-        usleep(1000000); // sleep for 1 second
-        drive_straight_pid(1000000, 0 ,-1);
-        usleep(1000000); // sleep for 1 second
-        *(br) = scan_right(3000000);
-        usleep(1000000); // sleep for 1 second
-        if(scan_left(3000000) != 1){
-            reset();
-        }
-        *(bl) = scan_left(3000000);
-        reset();
+        *(bl) = scan_left(2200000);
+        scan_right(2200000);
         usleep(1000000); 
-        return 0;
+        BT_drive(RIGHT_MOTOR, LEFT_MOTOR, 30);
+        usleep(300000);
+        BT_all_stop(1);
 
     }
-    *(tl) = -1;
-    *(tr) = -1;
-    *(br) = -1;
-    *(bl) = -1;
+    // *(tl) = -1;
+    // *(tr) = -1;
+    // *(br) = -1;
+    // *(bl) = -1;
     return (0);
 }
 
