@@ -121,8 +121,7 @@ unsigned char *readPPMimage(const char *filename, int *rx, int *ry);
 
 // Movement
 void drive(int max_ms, int direction);
-int drive_straight_pid(int max_ms, int stop_at_yellow, int direction);
-int driveStraightPID(int max_ms, int direction);
+int drive_straight_pid(int max_ms, int stop_at_colour, int direction, int stayonStreet);
 int turn_by_gyro(int target_deg);
 void turnLeft(void);
 void turnRight(void);
