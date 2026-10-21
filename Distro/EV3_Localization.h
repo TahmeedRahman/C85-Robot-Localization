@@ -125,6 +125,7 @@ int turn_by_gyro(int target_deg);
 void turnLeft(void);
 void turnRight(void);
 int turnToDirection(int *direction, int target_direction);
+void centerRobotOnIntersection();
 
 // Colour and Calibration
 void printColourName(int colour);

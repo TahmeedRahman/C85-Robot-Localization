@@ -232,7 +232,9 @@ int main(int argc, char *argv[])
      *******************************************************************************************************************************/
 
     drive_straight_pid(15000, 0, 1);
+    centerRobotOnIntersection();
 
+    
     exit(0);
 
     int robot_x = 0;
@@ -404,6 +406,14 @@ void drive(int max_ms, int direction)
 
     BT_turn(LEFT_MOTOR, power, RIGHT_MOTOR, power);
     usleep(max_ms * 1000);
+    BT_all_stop(1);
+}
+
+void centerRobotOnIntersection()
+{
+    // Drive forwards
+    BT_drive(RIGHT_MOTOR, LEFT_MOTOR, BASE_POWER);
+    usleep(600000);
     BT_all_stop(1);
 }
 
