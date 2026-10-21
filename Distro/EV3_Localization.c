@@ -519,7 +519,7 @@ int find_street(void)
     // Found a road, turn onto the road
     if (status == BLACK)
     {
-        turn_by_gyro(90);
+        turnRight();
         return 1;
     }
 
@@ -528,13 +528,13 @@ int find_street(void)
     {
 
         drive_straight_pid(200, 0, -1);
-        turn_by_gyro(90);
+        turnRight();
 
         status = drive_straight_pid(15000, BLACK, 1);
 
         if (status == BLACK)
         {
-            turn_by_gyro(90);
+            turnRight();
             return 1;
         }
     }
@@ -583,7 +583,7 @@ int drive_along_street(void)
             drive_straight_pid(15000, YELLOW, -1);
 
             // Turn left 90 degrees and try another street
-            turn_by_gyro(-90);
+            turnLeft();
             angleTurned -= 90;
         }
         else
@@ -752,6 +752,7 @@ int robot_localization(int *robot_x, int *robot_y, int *direction)
         update_beliefs_based_on_intersection(numIntersections, topLeft, topRight, backRight, backLeft);
 
         normalize_beliefs(numIntersections);
+        printBeliefs();
 
         double highestBelief = get_highest_belief_coords(numIntersections, robot_x, robot_y, direction);
         // Return when we obtain a belief higher than BELIEF_THRESHOLD. This will be our localized coordinates/direction
@@ -1154,7 +1155,6 @@ unsigned char *readPPMimage(const char *filename, int *rx, int *ry)
     return (im);
 }
 
-// Helper function to load calibrated colour data from
 int load_calibration(const char *filename, Calibration calibration[])
 {
     FILE *file = fopen(filename, "r");
@@ -1172,11 +1172,12 @@ int load_calibration(const char *filename, Calibration calibration[])
     while (count < NUM_COLOURS &&
            fgets(line, sizeof(line), file) != NULL)
     {
-        if (sscanf(line, "%15[^,],%lf,%lf,%lf",
+        if (sscanf(line, "%15[^,],%lf,%lf,%lf,%lf",
                    calibration[count].name,
                    &calibration[count].red,
                    &calibration[count].green,
-                   &calibration[count].blue) == 4)
+                   &calibration[count].blue,
+                   &calibration[count].ambient) == 5)
         {
             count++;
         }
@@ -1236,11 +1237,13 @@ int read_calibrated_colour(Calibration calibration[])
                 continue;
             }
 
-            double dr = (double)rgb[0] / sensorSum - (double)calibration[j].red / calibratedSum;
-            double dg = (double)rgb[1] / sensorSum - (double)calibration[j].green / calibratedSum;
-            double db = (double)rgb[2] / sensorSum - (double)calibration[j].blue / calibratedSum;
+            double dr = (double)rgb[0] / sensorSum - calibration[j].red / calibratedSum;
+            double dg = (double)rgb[1] / sensorSum - calibration[j].green / calibratedSum;
+            double db = (double)rgb[2] / sensorSum - calibration[j].blue / calibratedSum;
 
-            double distance = dr * dr + dg * dg + db * db;
+            double ambientDifference = (double)A[i] - calibration[j].ambient;
+
+            double distance = dr * dr + dg * dg + db * db + AMBIENT_WEIGHT * ambientDifference * ambientDifference;
 
             int colour = 0;
             if (strcmp(calibration[j].name, "Black") == 0)
@@ -1467,5 +1470,40 @@ void initializeBeliefs(double beliefArray[][4])
             beliefArray[i + (j * sx)][2] = 1.0 / (double)(sx * sy * 4);
             beliefArray[i + (j * sx)][3] = 1.0 / (double)(sx * sy * 4);
         }
+    }
+}
+
+// Logging method for belief map visualization
+void printBeliefs(void)
+{
+    for (int y = 0; y < sy; y++)
+    {
+        for (int x = 0; x < sx; x++)
+        {
+            int i = y * sx + x;
+
+            printf("%d   %d", beliefs[i][0], beliefs[i][1]);
+            if (x < sx - 1)
+                printf("     ");
+        }
+        printf("\n");
+
+        for (int x = 0; x < sx; x++)
+        {
+            printf("  +  ");
+            if (x < sx - 1)
+                printf("-----");
+        }
+        printf("\n");
+
+        for (int x = 0; x < sx; x++)
+        {
+            int i = y * sx + x;
+
+            printf("%d   %d", beliefs[i][3], beliefs[i][2]);
+            if (x < sx - 1)
+                printf("     ");
+        }
+        printf("\n\n");
     }
 }

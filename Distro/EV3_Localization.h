@@ -83,6 +83,7 @@ code that you have to complete in order to implement the localization algorithms
 #define CALIBRATION_SAMPLE_COUNT 10
 #define CALIBRATION_OUTPUT_FILE "colour_calibration.csv"
 #define NUM_COLOURS 6
+#define AMBIENT_WEIGHT 0.2
 
 #define BELIEF_THRESHOLD 0.4
 
@@ -99,6 +100,7 @@ typedef struct
   double red;
   double green;
   double blue;
+  double ambient;
 } Calibration;
 
 int parse_map(unsigned char *map_img, int rx, int ry);
@@ -134,5 +136,6 @@ double get_highest_belief_coords(int numIntersections, int *robot_x, int *robot_
 void rotate_beliefs(int numIntersections, int angle);
 void shiftBeliefs(int numIntersections);
 void update_beliefs_based_on_intersection(int numIntersections, int topLeft, int topRight, int backRight, int backLeft);
+void printBeliefs(void);
 
 #endif
