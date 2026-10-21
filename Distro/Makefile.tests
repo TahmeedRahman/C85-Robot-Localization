@@ -1,0 +1,70 @@
+# =============================================================================
+# Makefile for quick EV3 tests + the main program (test tooling added by the
+# team; not part of the starter code).
+#
+#   make new T=name        create tests/name.c from tests/template.c
+#   make name              compile tests/name.c  ->  ./name      (then run ./name)
+#   make run T=name        compile and run in one go (ARGS="..." optional)
+#   make list              list the test programs
+#   make clean             delete built executables
+#
+#   make EV3_Localization  build the main program (links MODULES below)
+#
+# The hex id and ports live in ev3_config.h -- there is nothing to type here.
+# =============================================================================
+
+# ---- Test files whose functions the MAIN program uses --------------------
+# Add the .c files whose functions you copied/prototyped for main, e.g.
+#   MODULES = tests/colour.c tests/turning.c
+# They are compiled with -DNO_TEST_MAIN so their test main() is left out.
+MODULES ?=
+
+CC      = gcc
+CFLAGS  = -Wall -g -I. -I./EV3_RobotControl
+LDLIBS  = -lbluetooth -lm
+
+BT_SRC  = EV3_RobotControl/btcomm.c
+HEADERS = $(wildcard *.h EV3_RobotControl/*.h)
+
+vpath %.c tests .
+
+.DEFAULT_GOAL := help
+.PHONY: help list new run clean
+
+# make <name>  ->  compile tests/<name>.c (rebuilds if the source, any header
+# or this Makefile changed)
+%: %.c $(BT_SRC) $(HEADERS) $(MAKEFILE_LIST)
+	$(CC) $(CFLAGS) $< $(BT_SRC) -o $@ $(LDLIBS)
+	@echo ">> built ./$@   (run it with:  ./$@)"
+
+# The main program: same, but also links MODULES without their test mains
+EV3_Localization: EV3_Localization.c $(MODULES) $(BT_SRC) $(HEADERS) $(MAKEFILE_LIST)
+	$(CC) $(CFLAGS) -DNO_TEST_MAIN EV3_Localization.c $(MODULES) $(BT_SRC) -o $@ $(LDLIBS)
+	@echo ">> built ./$@"
+
+new:
+	@test -n "$(T)" || { echo "usage: make new T=<name>"; exit 1; }
+	@test ! -e tests/$(T).c || { echo "tests/$(T).c already exists"; exit 1; }
+	@cp tests/template.c tests/$(T).c
+	@echo "created tests/$(T).c  ->  edit it, then:  make $(T)  &&  ./$(T)"
+
+run:
+	@test -n "$(T)" || { echo "usage: make run T=<name> [ARGS=\"...\"]"; exit 1; }
+	@$(MAKE) --no-print-directory $(T)
+	@./$(T) $(ARGS)
+
+list:
+	@echo "Test programs:"
+	@grep -l "int main" tests/*.c 2>/dev/null | sed 's|tests/||; s|\.c$$||; s|^|  |'
+
+help:
+	@echo "make new T=<name>      new test from tests/template.c"
+	@echo "make <name>            compile tests/<name>.c, then run ./<name>"
+	@echo "make run T=<name>      compile + run  (ARGS=\"...\" for arguments)"
+	@echo "make list | clean      list tests | delete executables"
+	@echo "make EV3_Localization  build the main program"
+
+clean:
+	@for f in $$(grep -l "int main" tests/*.c 2>/dev/null); do rm -f "$$(basename $$f .c)"; done
+	@rm -f EV3_Localization
+	@echo "cleaned"

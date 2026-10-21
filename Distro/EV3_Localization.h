@@ -70,17 +70,28 @@ code that you have to complete in order to implement the localization algorithms
 #include "./EV3_RobotControl/btcomm.h"
 
 #ifndef HEXKEY
-#define HEXKEY "00:16:53:55:D2:17" // <--- SET UP YOUR EV3's HEX ID here
+#define HEXKEY "00:16:53:55:D2:17"
 #endif
 
-// TODO: Update this and define ports for other sensors/motors
-#define SENSOR_PORT PORT_1
+#define COLOUR_PORT PORT_1
+#define GYRO_PORT PORT_2
+#define TOUCH_PORT PORT_3
+#define LEFT_MOTOR MOTOR_B
+#define RIGHT_MOTOR MOTOR_C
+#define SLIDE_MOTOR MOTOR_D
 
 #define CALIBRATION_SAMPLE_COUNT 10
 #define CALIBRATION_OUTPUT_FILE "colour_calibration.csv"
 #define NUM_COLOURS 6
 
 #define BELIEF_THRESHOLD 0.4
+
+#define BLACK 1
+#define BLUE 2
+#define GREEN 3
+#define YELLOW 4
+#define RED 5
+#define WHITE 6
 
 typedef struct
 {
@@ -100,15 +111,23 @@ int turn_at_intersection(int turn_direction);
 void calibrate_sensor(void);
 unsigned char *readPPMimage(const char *filename, int *rx, int *ry);
 
-// Custom Helper Functions
+/**
+ * Custom Helper Functions
+ **/
 
-void print_colour_readings(void);
+// Movement
 int drive_straight_pid(int max_ms, int stop_at_yellow, int direction);
 int turn_by_gyro(int target_deg);
+void turnLeft(void);
+void turnRight(void);
+int turnToDirection(int *direction, int target_direction);
 
+// Colour and Calibration
 int load_calibration(const char *filename, Calibration calibration[]);
 int read_calibrated_colour(Calibration calibration[]);
+void print_colour_readings(void);
 
+// Localization
 void initializeBeliefs(double beliefArray[][4]);
 void normalize_beliefs(int numIntersections);
 double get_highest_belief_coords(int numIntersections, int *robot_x, int *robot_y, int *direction);
