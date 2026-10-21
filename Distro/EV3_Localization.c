@@ -192,9 +192,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    // Temp logging
     fprintf(stderr, "Map size: %d, %d \n", sx, sy);
-
     fprintf(stderr, "All set, ready to go! \n");
 
     /*******************************************************************************************************************************
@@ -256,27 +254,27 @@ void printColourName(int colour)
 {
     switch (colour)
     {
-        case 1:
-            fprintf(stderr, "Black\n");
-            break;
-        case 2:
-            fprintf(stderr, "Blue\n");
-            break;
-        case 3:
-            fprintf(stderr, "Green\n");
-            break;
-        case 4:
-            fprintf(stderr, "Yellow\n");
-            break;
-        case 5:
-            fprintf(stderr, "Red\n");
-            break;
-        case 6:
-            fprintf(stderr, "White\n");
-            break;
-        default:
-            fprintf(stderr, "Unknown colour (%d)\n", colour);
-            break;
+    case 1:
+        fprintf(stderr, "Black\n");
+        break;
+    case 2:
+        fprintf(stderr, "Blue\n");
+        break;
+    case 3:
+        fprintf(stderr, "Green\n");
+        break;
+    case 4:
+        fprintf(stderr, "Yellow\n");
+        break;
+    case 5:
+        fprintf(stderr, "Red\n");
+        break;
+    case 6:
+        fprintf(stderr, "White\n");
+        break;
+    default:
+        fprintf(stderr, "Unknown colour (%d)\n", colour);
+        break;
     }
 }
 
@@ -604,6 +602,8 @@ int scan_intersection(int *tl, int *tr, int *br, int *bl)
      * after this call.
      */
 
+    fprintf(stderr, "Starting intersection scan ...\n");
+
     int color = read_calibrated_colour(calibration);
     if (color == 4)
     {
@@ -637,7 +637,13 @@ int scan_intersection(int *tl, int *tr, int *br, int *bl)
         reset();
         usleep(1000000);
 
+        fprintf(stderr, "Intersection scanned: TL=%d, TR=%d, BR=%d, BL=%d\n", *tl, *tr, *br, *bl);
+
         return 1;
+    }
+    else
+    {
+        fprintf(stderr, "Robot is not on a yellow intersection, scan failed ...\n");
     }
 }
 
@@ -1263,6 +1269,7 @@ int read_calibrated_colour(Calibration calibration[])
         }
     }
 
+    // printColourName(bestColour);
     return bestColour;
 }
 
@@ -1434,7 +1441,9 @@ void update_beliefs_based_on_intersection(int numIntersections, int topLeft, int
             {
                 // Small adjustment in case of sensor error, close enough match
                 beliefs[i][d] *= 1.2;
-            } else {
+            }
+            else
+            {
                 // Decrease if not matching at all
                 beliefs[i][d] /= 2;
             }
