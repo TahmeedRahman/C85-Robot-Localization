@@ -519,6 +519,7 @@ int find_street(void)
     // Found a road, turn onto the road
     if (status == BLACK)
     {
+        fprintf(stderr, "We found a road, turning right onto the road ...\n");
         turnRight();
         return 1;
     }
@@ -527,6 +528,7 @@ int find_street(void)
     if (status == RED)
     {
 
+        fprintf(stderr, "We hit a wall while trying to find a street, backing up and turning right ...\n");
         drive_straight_pid(200, 0, -1);
         turnRight();
 
@@ -534,6 +536,7 @@ int find_street(void)
 
         if (status == BLACK)
         {
+            fprintf(stderr, "We found a road, turning right onto the road ...\n");
             turnRight();
             return 1;
         }
@@ -573,12 +576,15 @@ int drive_along_street(void)
         // We found the next intersection, return
         if (status == 4)
         {
+            fprintf(stderr, "We found the next intersection ...\n");
             return angleTurned;
         }
 
         // We hit a wall, try again next loop
         if (status == 5)
         {
+            fprintf(stderr, "We hit a wall, returning back to intersection and turning left to try again ...\n");
+
             // Back up to the starting intersection
             drive_straight_pid(15000, YELLOW, -1);
 
