@@ -115,6 +115,8 @@ int map[400][4];        // This holds the representation of the map, up to 20x20
 int sx, sy;             // Size of the map (number of intersections along x and y)
 double beliefs[400][4]; // Beliefs for each location and motion direction
 
+Calibration calibration[NUM_COLOURS];
+
 int main(int argc, char *argv[])
 {
     char mapname[1024];
@@ -143,8 +145,6 @@ int main(int argc, char *argv[])
     }
 
     // Read calibrated colour values for comparison during runtime
-    Calibration calibration[NUM_COLOURS];
-
     int calibration_count = load_calibration(CALIBRATION_OUTPUT_FILE, calibration);
     if (calibration_count == 0)
     {
@@ -263,72 +263,6 @@ int main(int argc, char *argv[])
 
 // ###################################  COLOR SENSOR ###################################//
 
-// Denoising for color sensor readings
-
-static int median(const int *v, int n)
-{
-    int tmp[MAX_SAMPLES];
-    for (int i = 0; i < n; i++)
-        tmp[i] = v[i]; // copy so the original order is kept
-
-    for (int i = 0; i < n - 1; i++) // simple bubble sort
-        for (int j = 0; j < n - 1 - i; j++)
-            if (tmp[j] > tmp[j + 1]) // regular int comparison
-            {
-                int t = tmp[j];
-                tmp[j] = tmp[j + 1];
-                tmp[j + 1] = t;
-            }
-
-    return tmp[n / 2]; // middle value
-}
-
-// Helper function to get color from sensor reading
-
-int classify_colour(int R, int G, int B, int A)
-{
-    if (A < 5 && (R + G + B) < BLACK_SUM_MAX)
-        return (1); // black
-    if (R > YELLOW_MIN && G > YELLOW_MIN && B < 0.6 * (R < G ? R : G))
-        return (4); // yellow
-    if (R > RED_MIN && G < 0.5 * R && B < 0.5 * R)
-        return (5); // red: R high
-    if (G > R && G > B && A < 3)
-        return (3); // green
-    if (B > R && B > G && A < 3)
-        return (2); // blue
-    return (6);     // anything else: unknown
-}
-
-// Denoise reading
-// TODO: Use read_calibrated_colour() instead of BT_read_colour_RGBraw_NXT
-// TODO: read_calibrated_colour() currently uses BT_read_colour_sensor_RGB intead of BT_read_colour_RGBraw_NXT. **** Fix this ****
-// Actually just dont use this at all, update read_calibrated_colour() to take STILL_SAMPLES and use the return value of that instead
-int read_colour_still(void)
-{
-    int R[MAX_SAMPLES], G[MAX_SAMPLES], B[MAX_SAMPLES], A[MAX_SAMPLES], cls[MAX_SAMPLES];
-    int r = 0, g = 0, b = 0, a = 0, k = 0;
-
-    BT_read_colour_RGBraw_NXT(COLOUR_PORT, &r, &g, &b, &a); // throw away the first read (stale after stopping)
-
-    for (int tries = 0; tries < 2 * STILL_SAMPLES && k < STILL_SAMPLES; tries++)
-    {
-        if (BT_read_colour_RGBraw_NXT(COLOUR_PORT, &r, &g, &b, &a) == 1) // only keep successful reads
-        {
-            R[k] = r;
-            G[k] = g;
-            B[k] = b;
-            A[k] = a;
-            cls[k] = classify_colour(r, g, b, a);
-            k++;
-        }
-    }
-    if (k < 3)
-        return (-1);
-    int c = classify_colour(median(R, k), median(G, k), median(B, k), median(A, k));
-    return (c);
-}
-
 /*
     Read current colour and print
     1 -  Black
@@ -346,7 +280,7 @@ void print_colour_readings(void)
     int HR = 0, HB = 0, HG = 0, HA = 0;
     for (int i = 0; i < 200; i++)
     {
-        index = read_colour_still();
+        index = read_calibrated_colour(calibration);
         if (index != -1)
         {
             // if (BT_read_colour_RGBraw_NXT(COLOUR_PORT,&R,&G,&B,&A)==1){
@@ -455,7 +389,7 @@ int turnToDirection(int *direction, int target_direction)
  */
 int drive_straight_pid(int max_ms, int stop_at_colour, int direction)
 {
-    int angle = 0, rate = 0, R, G, B, A;
+    int angle = 0, rate = 0;
     int colour_hits = 0;
     double integral = 0, u;
     int lp, rp;
@@ -498,16 +432,13 @@ int drive_straight_pid(int max_ms, int stop_at_colour, int direction)
         printf("Base Power: %d, lp: %d, rp: %d\n", base, lp, rp);
         BT_turn(LEFT_MOTOR, lp, RIGHT_MOTOR, rp);
 
-        if (BT_read_colour_RGBraw_NXT(COLOUR_PORT, &R, &G, &B, &A) == 1)
-        {
-            c = classify_colour(R, G, B, A);
+        c = read_calibrated_colour(calibration);
 
-            // Found red, stop and return
-            if (c == RED)
-            {
-                BT_all_stop(1);
-                return (RED);
-            }
+        // Found red, stop and return
+        if (c == RED)
+        {
+            BT_all_stop(1);
+            return (RED);
         }
 
         // TODO: Make sure this logic is sound
@@ -538,7 +469,7 @@ int scan_left(int us)
     BT_drive(SLIDE_MOTOR, SLIDE_MOTOR, -90);
     usleep(us);
     BT_all_stop(1);
-    int color = read_colour_still();
+    int color = read_calibrated_colour(calibration);
     return color;
 }
 
@@ -547,7 +478,7 @@ int scan_right(int us)
     BT_drive(SLIDE_MOTOR, SLIDE_MOTOR, 90);
     usleep(us);
     BT_all_stop(1);
-    int color = read_colour_still();
+    int color = read_calibrated_colour(calibration);
     return color;
 }
 
@@ -699,7 +630,7 @@ int scan_intersection(int *tl, int *tr, int *br, int *bl)
      * after this call.
      */
 
-    int color = read_colour_still();
+    int color = read_calibrated_colour(calibration);
     if (color == 4)
     {
         drive_straight_pid(1000000, 0, 1);
@@ -1266,48 +1197,90 @@ int load_calibration(const char *filename, Calibration calibration[])
 //  6    White
 int read_calibrated_colour(Calibration calibration[])
 {
-    int rgb[3];
-    BT_read_colour_sensor_RGB(COLOUR_PORT, rgb);
+    int R[STILL_SAMPLES], G[STILL_SAMPLES], B[STILL_SAMPLES], A[STILL_SAMPLES];
+    int counts[7] = {0};
+    int r, g, b, a;
+    int k = 0;
 
-    double minDistance = -1;
-    int closestColour = 0;
-
-    for (int i = 0; i < NUM_COLOURS; i++)
+    for (int tries = 0; tries < 2 * STILL_SAMPLES && k < STILL_SAMPLES; tries++)
     {
-        // Calculate Normalized Eucliduan distance between points to compare colours and find best match
-        double sensorSum = rgb[0] + rgb[1] + rgb[2];
-        double calibratedSum = calibration[i].red + calibration[i].green + calibration[i].blue;
-
-        double dr = (double)rgb[0] / sensorSum - (double)calibration[i].red / calibratedSum;
-        double dg = (double)rgb[1] / sensorSum - (double)calibration[i].green / calibratedSum;
-        double db = (double)rgb[2] / sensorSum - (double)calibration[i].blue / calibratedSum;
-
-        double distance = dr * dr + dg * dg + db * db;
-
-        int colour = 0;
-        if (strcmp(calibration[i].name, "Black") == 0)
-            colour = 1;
-        else if (strcmp(calibration[i].name, "Blue") == 0)
-            colour = 2;
-        else if (strcmp(calibration[i].name, "Green") == 0)
-            colour = 3;
-        else if (strcmp(calibration[i].name, "Yellow") == 0)
-            colour = 4;
-        else if (strcmp(calibration[i].name, "Red") == 0)
-            colour = 5;
-        else if (strcmp(calibration[i].name, "White") == 0)
-            colour = 6;
-        else
-            continue;
-
-        if (minDistance < 0 || distance < minDistance)
+        if (BT_read_colour_RGBraw_NXT(COLOUR_PORT, &r, &g, &b, &a) == 1)
         {
-            minDistance = distance;
-            closestColour = colour;
+            R[k] = r;
+            G[k] = g;
+            B[k] = b;
+            A[k] = a;
+            k++;
         }
     }
 
-    return closestColour;
+    if (k < 3)
+    {
+        return 0;
+    }
+
+    for (int i = 0; i < k; i++)
+    {
+        int rgb[3] = {R[i], G[i], B[i]};
+        double minDistance = -1;
+        int closestColour = 0;
+
+        for (int j = 0; j < NUM_COLOURS; j++)
+        {
+            // Calculate Normalized Eucliduan distance between points to compare colours and find best match
+            double sensorSum = rgb[0] + rgb[1] + rgb[2];
+            double calibratedSum = calibration[j].red + calibration[j].green + calibration[j].blue;
+
+            if (sensorSum == 0 || calibratedSum == 0)
+            {
+                continue;
+            }
+
+            double dr = (double)rgb[0] / sensorSum - (double)calibration[j].red / calibratedSum;
+            double dg = (double)rgb[1] / sensorSum - (double)calibration[j].green / calibratedSum;
+            double db = (double)rgb[2] / sensorSum - (double)calibration[j].blue / calibratedSum;
+
+            double distance = dr * dr + dg * dg + db * db;
+
+            int colour = 0;
+            if (strcmp(calibration[j].name, "Black") == 0)
+                colour = BLACK;
+            else if (strcmp(calibration[j].name, "Blue") == 0)
+                colour = BLUE;
+            else if (strcmp(calibration[j].name, "Green") == 0)
+                colour = GREEN;
+            else if (strcmp(calibration[j].name, "Yellow") == 0)
+                colour = YELLOW;
+            else if (strcmp(calibration[j].name, "Red") == 0)
+                colour = RED;
+            else if (strcmp(calibration[j].name, "White") == 0)
+                colour = WHITE;
+            else
+                continue;
+
+            if (minDistance < 0 || distance < minDistance)
+            {
+                minDistance = distance;
+                closestColour = colour;
+            }
+        }
+
+        if (closestColour != 0)
+        {
+            counts[closestColour]++;
+        }
+    }
+
+    int bestColour = 0;
+    for (int i = 1; i <= 6; i++)
+    {
+        if (counts[i] > counts[bestColour])
+        {
+            bestColour = i;
+        }
+    }
+
+    return bestColour;
 }
 
 // Normalize values in beliefs[400][4]. numIntersections represents sx * sy
