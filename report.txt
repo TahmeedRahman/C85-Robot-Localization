@@ -1,3 +1,9 @@
+Team Name: Ctrl + C
+
+Team Members:
+Kevin Wang, 1010291284
+Tahmeed Rahman, 1011310957
+
 Q1) What is the total number of probabilities your robot has to keep
  track of for a map of size m x n
 
@@ -58,7 +64,9 @@ If we exceed this threshold, we have a strong belief that we have sucessfully lo
 Q9) Briefly explain your robot design choices, including sensor placement
  and robot mobility considerations.
 
-
+We placed the colour sensor as close to the ground as possible to increase sensor accuracy and reduce noise
+The colour sensor was also placed on a shaft, allowing it to be shifted left/right to detect colours without moving the robot (decrease errors from movement)
+The robot needed to move slowly and stabley, to improve sensor readings and movement consistancy
 
 Q10) What parameters did you find affect the most the ability of the robot to
  determine its location?
@@ -81,3 +89,40 @@ Q13) Are there locations in the map that make localization harder? (i.e.
  does it matter where your robot starts its journey? Why?)
 
 Starting at an angle makes localization tricker, as our current implementation assumes we start perpendicular to a road.
+
+Other Questions:
+
+Do you feel this project helped you to understand the following ideas:
+(please answer yes, no, somewhat, and comment on what if anything could
+have improved your learning experience).
+
+1) The main steps of a robot localization algorithm
+
+Yes,
+
+2) Dealing with real-world sensors
+
+Somewhat,
+
+3) Dealing with real-world motors and robot motions
+
+
+
+4) Using probabilities to keep track of belief about a robot's position
+
+
+
+5) Managing uncertainty (e.g. in the quality of sensor readings, or accuracy of
+ robot motions)
+
+
+
+6) Do you feel confident you could implement a probabilistic localization algorithm
+ for a more complex robot, working in a real world environment?
+ (please explain your answer)
+
+
+
+7) Any other comments regarding your experience with this project?
+
+
