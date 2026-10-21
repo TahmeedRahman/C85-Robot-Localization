@@ -149,10 +149,11 @@ int main(int argc, char *argv[])
     if (calibration_count == 0)
     {
         fprintf(stderr, "Unable to load colour calibration\n");
-        exit(1);
+        exit(0);
     }
     else if (calibration_count == -1)
     {
+        exit(0);
         // Optional, make some sort of fallback to not use read_calibrated_colour
     }
 
@@ -196,22 +197,6 @@ int main(int argc, char *argv[])
 
     fprintf(stderr, "All set, ready to go! \n");
 
-    // drive_straight_pid(1000, 0, 1);
-
-    // int status = drive_along_street();
-    // if(status == 1){
-    //     drive_straight_pid(300, 0, 1);
-    //     turn_by_gyro(360);
-    //     drive_straight_pid(450, 0, -1);
-    // }
-
-    turn_by_gyro(180);
-
-    // print_colour_readings();
-    //  //drive_along_street();
-    // int top_left, top_right, bottom_right, bottom_left;
-    // scan_intersection(&top_left, &top_right, &bottom_right, &bottom_left);
-
     /*******************************************************************************************************************************
      *
      *  TO DO - Implement the main localization loop, this loop will have the robot explore the map, scanning intersections and
@@ -247,6 +232,10 @@ int main(int argc, char *argv[])
      *          run localization again.
      *
      *******************************************************************************************************************************/
+
+    drive_straight_pid(15000, 0, 1);
+
+    exit(0);
 
     int robot_x = 0;
     int robot_y = 0;
@@ -773,9 +762,7 @@ int go_to_target(int robot_x, int robot_y, int direction, int target_x, int targ
      * Return values: 1 if successful (the bot reached its target destination), 0 otherwise
      */
 
-    /************************************************************************************************************************
-     *   TO DO  -   Complete this function
-     ***********************************************************************************************************************/
+    fprintf(stderr, "Navigating from (%d, %d) to (%d, %d)\n", robot_x, robot_y, target_x, target_y);
 
     // Align x coord
     while (robot_x != target_x)
@@ -792,12 +779,16 @@ int go_to_target(int robot_x, int robot_y, int direction, int target_x, int targ
             target_direction = 3;
         }
 
+        fprintf(stderr, "Moving horizontally toward x=%d\n", target_x);
+
         // Turn and drive to the next intersection
         turnToDirection(&direction, target_direction);
         drive_along_street();
 
         // Update current x coord
         robot_x += (target_x > robot_x) ? 1 : -1;
+
+        fprintf(stderr, "Current position: (%d, %d)\n", robot_x, robot_y);
     }
 
     // Align y coord
@@ -815,12 +806,16 @@ int go_to_target(int robot_x, int robot_y, int direction, int target_x, int targ
             target_direction = 0;
         }
 
+        fprintf(stderr, "Moving vertically toward y=%d\n", target_y);
+
         // Turn and drive to the next intersection
         turnToDirection(&direction, target_direction);
         drive_along_street();
 
         // Update current y coord
         robot_y += (target_y > robot_y) ? 1 : -1;
+
+        fprintf(stderr, "Current position: (%d, %d)\n", robot_x, robot_y);
     }
 
     return 1;
