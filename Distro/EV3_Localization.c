@@ -91,11 +91,11 @@
 #define YELLOW_MIN 300
 #define RED_MIN 300
 
-#define BASE_POWER 2
+#define BASE_POWER 25
 #define KP 2.0
 #define KI 0.0
 #define KD 0.0
-#define LOOP_MS 50
+// #define LOOP_MS 50
 #define I_LIMIT 20.0
 #define GYRO_SIGN 1
 
@@ -231,10 +231,18 @@ int main(int argc, char *argv[])
      *
      *******************************************************************************************************************************/
 
-    drive_straight_pid(15000, 0, 1);
+    drive_straight_pid(15000, YELLOW, 1);
     centerRobotOnIntersection();
+    turnRight();
 
-    
+    drive_straight_pid(15000, YELLOW, 1);
+    centerRobotOnIntersection();
+    turnRight();
+
+    drive_straight_pid(15000, YELLOW, 1);
+    centerRobotOnIntersection();
+    turnRight();
+
     exit(0);
 
     int robot_x = 0;
@@ -411,11 +419,93 @@ void drive(int max_ms, int direction)
 
 void centerRobotOnIntersection()
 {
-    // Drive forwards
-    BT_drive(RIGHT_MOTOR, LEFT_MOTOR, BASE_POWER);
-    usleep(600000);
-    BT_all_stop(1);
+    drive_straight_pid(1000, 0, 1);
 }
+
+/*
+ * PID Controller
+ *
+ * - Stops motors and resets gyro heading before starting
+ * - If stop_at_colour is enabled, stops at the first instance of the colour (See mapping) and return 4 (only after two consecutive readings)
+ * - direction = 1 to drive fowards, direction = -1 to drive backwards
+ *
+ * - Stops and returns 5 if red is detected
+ * - Stops and returns 0 if the time limit is reached
+ */
+// int drive_straight_pid(int max_ms, int stop_at_colour, int direction)
+// {
+//     int angle = 0, rate = 0, R, G, B, A;
+//     int colour_hits = 0;
+//     double integral = 0, u;
+//     int lp, rp;
+//     int max_loops = max_ms / LOOP_MS;
+//     int base = direction * BASE_POWER;
+//     int c;
+
+//     BT_all_stop(0);
+//     usleep(500000);
+//     if (BT_read_gyro(GYRO_PORT, 1, &angle, &rate) != 1)
+//         return (-1); // reset heading to 0
+
+//     for (int loops = 0; loops < max_loops; loops++)
+//     {
+//         if (BT_read_gyro(GYRO_PORT, 0, &angle, &rate) != 1)
+//         {
+//             BT_all_stop(1);
+//             return (-1);
+//         }
+
+//         double err = GYRO_SIGN * angle;
+//         integral += err;
+//         if (integral > I_LIMIT)
+//             integral = I_LIMIT;
+//         if (integral < -I_LIMIT)
+//             integral = -I_LIMIT;
+
+//         u = KP * err + KI * integral + KD * GYRO_SIGN * rate;
+//         lp = (int)(base - u);
+//         rp = (int)(base + u);
+//         if (lp > 100)
+//             lp = 100;
+//         if (lp < -100)
+//             lp = -100;
+//         if (rp > 100)
+//             rp = 100;
+//         if (rp < -100)
+//             rp = -100;
+//         printf("Base Power: %d, lp: %d, rp: %d\n", base, lp, rp);
+//         BT_turn(LEFT_MOTOR, lp, RIGHT_MOTOR, rp);
+
+//         if (BT_read_colour_RGBraw_NXT(COLOUR_PORT, &R, &G, &B, &A) == 1)
+//         {
+//             c = classify_colour(R, G, B, A);
+
+//             // Found red, stop and return
+//             if (c == RED)
+//             {
+//                 BT_all_stop(1);
+//                 return (RED);
+//             }
+//         }
+
+//         // Continue only if we need to stop at a colour (see mapping)
+//         if (stop_at_colour != 0)
+//         {
+//             if (c == stop_at_colour)
+//                 colour_hits++;
+//             else
+//                 colour_hits = 0;
+//             if (colour_hits >= 2)
+//             {
+//                 BT_all_stop(1);
+//                 return (stop_at_colour);
+//             }
+//         }
+//         usleep(10000);
+//     }
+//     BT_all_stop(1);
+//     return (0);
+// }
 
 /*
  * PID Controller
@@ -429,28 +519,44 @@ void centerRobotOnIntersection()
  */
 int drive_straight_pid(int max_ms, int stop_at_colour, int direction)
 {
-    int angle = 0, rate = 0, R, G, B, A;
-    int colour_hits = 0;
+    int angle = 0, rate = 0;
     double integral = 0, u;
     int lp, rp;
-    int max_loops = max_ms / LOOP_MS;
     int base = direction * BASE_POWER;
-    int c;
 
+    // Stop motors and reset gyro heading
     BT_all_stop(0);
     usleep(500000);
-    if (BT_read_gyro(GYRO_PORT, 1, &angle, &rate) != 1)
-        return (-1); // reset heading to 0
 
-    for (int loops = 0; loops < max_loops; loops++)
+    if (BT_read_gyro(GYRO_PORT, 1, &angle, &rate) != 1)
     {
+        BT_all_stop(1);
+        return -1;
+    }
+
+    // Record start time
+    struct timespec start, now;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
+    while (1)
+    {
+        clock_gettime(CLOCK_MONOTONIC, &now);
+
+        long elapsed_ms =
+            (now.tv_sec - start.tv_sec) * 1000L +
+            (now.tv_nsec - start.tv_nsec) / 1000000L;
+
+        if (elapsed_ms >= max_ms)
+            break;
+
         if (BT_read_gyro(GYRO_PORT, 0, &angle, &rate) != 1)
         {
             BT_all_stop(1);
-            return (-1);
+            return -1;
         }
 
         double err = GYRO_SIGN * angle;
+
         integral += err;
         if (integral > I_LIMIT)
             integral = I_LIMIT;
@@ -458,8 +564,10 @@ int drive_straight_pid(int max_ms, int stop_at_colour, int direction)
             integral = -I_LIMIT;
 
         u = KP * err + KI * integral + KD * GYRO_SIGN * rate;
+
         lp = (int)(base - u);
         rp = (int)(base + u);
+
         if (lp > 100)
             lp = 100;
         if (lp < -100)
@@ -468,38 +576,14 @@ int drive_straight_pid(int max_ms, int stop_at_colour, int direction)
             rp = 100;
         if (rp < -100)
             rp = -100;
-        printf("Base Power: %d, lp: %d, rp: %d\n", base, lp, rp);
+
         BT_turn(LEFT_MOTOR, lp, RIGHT_MOTOR, rp);
 
-        if (BT_read_colour_RGBraw_NXT(COLOUR_PORT, &R, &G, &B, &A) == 1)
-        {
-            c = classify_colour(R, G, B, A);
-
-            // Found red, stop and return
-            if (c == RED)
-            {
-                BT_all_stop(1);
-                return (RED);
-            }
-        }
-
-        // Continue only if we need to stop at a colour (see mapping)
-        if (stop_at_colour != 0)
-        {
-            if (c == stop_at_colour)
-                colour_hits++;
-            else
-                colour_hits = 0;
-            if (colour_hits >= 2)
-            {
-                BT_all_stop(1);
-                return (stop_at_colour);
-            }
-        }
         usleep(10000);
     }
+
     BT_all_stop(1);
-    return (0);
+    return 0;
 }
 
 //******************   Sliding sensor mechanism *******************//

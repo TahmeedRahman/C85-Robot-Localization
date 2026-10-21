@@ -67,6 +67,7 @@ code that you have to complete in order to implement the localization algorithms
 #include <malloc.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>
 #include "./EV3_RobotControl/btcomm.h"
 
 #ifndef HEXKEY
@@ -121,6 +122,7 @@ unsigned char *readPPMimage(const char *filename, int *rx, int *ry);
 // Movement
 void drive(int max_ms, int direction);
 int drive_straight_pid(int max_ms, int stop_at_yellow, int direction);
+int driveStraightPID(int max_ms, int direction);
 int turn_by_gyro(int target_deg);
 void turnLeft(void);
 void turnRight(void);
