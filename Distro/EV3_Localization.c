@@ -91,7 +91,7 @@
 #define YELLOW_MIN 300
 #define RED_MIN 300
 
-#define BASE_POWER 30
+#define BASE_POWER 2
 #define KP 2.0
 #define KI 0.0
 #define KD 0.0
@@ -263,61 +263,32 @@ int main(int argc, char *argv[])
 
 // ###################################  COLOR SENSOR ###################################//
 
-/*
-    Read current colour and print
-    1 -  Black
-    2 -  Blue
-    3 -  Green
-    4 -  Yellow
-    5 -  Red
-    6 -  White
-*/
-void print_colour_readings(void)
+void printColourName(int colour)
 {
-    int R, G, B, A;
-    int index;
-    char *color;
-    int HR = 0, HB = 0, HG = 0, HA = 0;
-    for (int i = 0; i < 200; i++)
+    switch (colour)
     {
-        index = read_calibrated_colour(calibration);
-        if (index != -1)
-        {
-            // if (BT_read_colour_RGBraw_NXT(COLOUR_PORT,&R,&G,&B,&A)==1){
-            //   HR = (R > HR) ? R : HR;
-            //   HB = (B > HB) ? B : HB;
-            //   HG = (G > HG) ? G : HG;
-            //   HA = (A > HA) ? A : HA;
-            // index = classify_colour(R,G,B,A);
-            switch (index)
-            {
-            case 1:
-                color = "BLACK";
-                break;
-            case 2:
-                color = "BLUE";
-                break;
-            case 3:
-                color = "GREEN";
-                break;
-            case 4:
-                color = "YELLOW";
-                break;
-            case 5:
-                color = "RED";
-                break;
-            case 6:
-                color = "WHITE";
-                break;
-            default:
-                break;
-            }
-            // printf("R=%4d G=%4d B=%4d A=%4d -> colour index %d\n",R,G,B,A,index);
-            printf("Color Detected: %s\n", color);
-            usleep(100000);
-        }
+        case 1:
+            fprintf(stderr, "Black\n");
+            break;
+        case 2:
+            fprintf(stderr, "Blue\n");
+            break;
+        case 3:
+            fprintf(stderr, "Green\n");
+            break;
+        case 4:
+            fprintf(stderr, "Yellow\n");
+            break;
+        case 5:
+            fprintf(stderr, "Red\n");
+            break;
+        case 6:
+            fprintf(stderr, "White\n");
+            break;
+        default:
+            fprintf(stderr, "Unknown colour (%d)\n", colour);
+            break;
     }
-    // printf("Highest Values : R=%4d G=%4d B=%4d A=%4d\n",HR,HG,HB,HA);
 }
 
 // Turning to target degree helper
@@ -376,6 +347,15 @@ int turnToDirection(int *direction, int target_direction)
 }
 
 // Helper PID Controller
+
+void drive(int max_ms, int direction)
+{
+    int power = direction * BASE_POWER;
+
+    BT_turn(LEFT_MOTOR, power, RIGHT_MOTOR, power);
+    usleep(max_ms * 1000);
+    BT_all_stop(1);
+}
 
 /*
  * PID Controller
@@ -441,7 +421,6 @@ int drive_straight_pid(int max_ms, int stop_at_colour, int direction)
             return (RED);
         }
 
-        // TODO: Make sure this logic is sound
         // Continue only if we need to stop at a colour (see mapping)
         if (stop_at_colour != 0)
         {
@@ -1450,15 +1429,19 @@ void update_beliefs_based_on_intersection(int numIntersections, int topLeft, int
                 matches++;
             }
 
-            // If this intersection is exists and the robot is facing the right direction, increase the belief
+            // TODO: Configure these factors such that localization works in a limiited number of loops
             if (matches == 4)
             {
+                // If this intersection is exists and the robot is facing the right direction, increase the belief
                 beliefs[i][d] *= 3;
             }
             else if (matches == 3)
             {
                 // Small adjustment in case of sensor error, close enough match
                 beliefs[i][d] *= 1.2;
+            } else {
+                // Decrease if not matching at all
+                beliefs[i][d] /= 2;
             }
         }
     }

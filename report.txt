@@ -1,0 +1,83 @@
+Q1) What is the total number of probabilities your robot has to keep
+ track of for a map of size m x n
+
+m x n x 4. We have m x n intersections and 4 belief values stored per intersection for direction
+
+Q2) What should be the initial value of the probabilities your robot is
+ keeping track of?
+
+Sum of all probabilities must be 1. Hence, each value should be 1/(m x n x 4)
+
+Q3) Describe your strategy for dealing with sensor noise, and
+ explain why it should work and how you tested it
+
+Taking multiple measurements when detecting colour. Also calibrating the sensor beforehand and relying on those values to determine colour.
+This allows us to get a better average of what colour corresponds to what
+
+Q4) Describe your probability update function in detail and
+ explain how you defined 'agreement' as well as how you
+ Determined the amount by which to update probabilities.
+
+We have belief value update functions for rotation (if we rotate by turning left/right, we rotate the beliefs by the same amount),
+movement (if we move one intersection, we shift all beliefs by the same amount,
+and intersection scanning (if we see 4 matching colours in a direction, we have "agreement" and we increase the probability accordingly. We also do smaller increases for close matches, and decrease when we don't get a match)
+We determine the amounts of increase by trial and error (seeing how the robot performance and adjusting based on that)
+
+Q5) Describe in detail your robot’s exploration strategy – it should
+ be more complex than simply moving in the same direction
+ until hitting the boundary of the map. How did you choose this
+ Strategy?
+
+Drive along the street until we hit the next intersection. If we hit a wall, we back up to the intersection, turn right 90 degrees, and try again.
+In this way, we avoid getting stuck in loops while being able to explore a large portion of the map for sucessful localization
+
+Q6) Describe in detail how beliefs are shifted when the robot gets
+to a boundary. Consider this problem carefully, the correct
+way to handle this is not obvious. Explain clearly what
+assumptions regarding the robot's motion support your
+strategy for shifting belief values in this case.
+
+We assume that upon hitting a wall (boundary), the robot immediately backs up and returns to the starting intersection.
+In this way, we do not shift beliefs after hitting a wall as we end up in the same starting location/direction
+
+Q7) Describe in detail how beliefs are shifted when the robot turns
+90 degrees (either left or right) without going to a different
+Intersection. Describe your assumptions about robot motion,
+and how these support your strategy for handling this case.
+
+We assume the robot only makes 90 degrees turns when moving.
+On turning left, we shift the directional beliefs for each intersection left by 1
+Similarly for right turns, we shift beliefs right by 1
+
+Q8) Explain your method for deciding when the robot has achieved
+ correct localization
+
+We set a threshold for belief. Each loop, we check for the highest belief value.
+If we exceed this threshold, we have a strong belief that we have sucessfully localized
+
+Q9) Briefly explain your robot design choices, including sensor placement
+ and robot mobility considerations.
+
+
+
+Q10) What parameters did you find affect the most the ability of the robot to
+ determine its location?
+
+Speed of movement. If the robot moved too fast, we had difficulty scanning colours accurately.
+By lowering our speed, we were able to get better results which improved the overall localization process
+
+Q11) Can external factors (illumination in the room, for example) affect the
+ ability of the robot to find itself?
+
+Yes, colour sensing is calibrated based on the current room illumination.
+If this changes, we would get varying different readings, which we would need to account for by recalibrating
+
+Q12) On average, how many intersections does your robot need to visit
+ to achieve successful localization?
+
+
+
+Q13) Are there locations in the map that make localization harder? (i.e.
+ does it matter where your robot starts its journey? Why?)
+
+Starting at an angle makes localization tricker, as our current implementation assumes we start perpendicular to a road.

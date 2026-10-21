@@ -80,7 +80,7 @@ code that you have to complete in order to implement the localization algorithms
 #define RIGHT_MOTOR MOTOR_C
 #define SLIDE_MOTOR MOTOR_D
 
-#define CALIBRATION_SAMPLE_COUNT 10
+#define CALIBRATION_SAMPLE_COUNT 20
 #define CALIBRATION_OUTPUT_FILE "colour_calibration.csv"
 #define NUM_COLOURS 6
 #define AMBIENT_WEIGHT 0.2
@@ -118,6 +118,7 @@ unsigned char *readPPMimage(const char *filename, int *rx, int *ry);
  **/
 
 // Movement
+void drive(int max_ms, int direction);
 int drive_straight_pid(int max_ms, int stop_at_yellow, int direction);
 int turn_by_gyro(int target_deg);
 void turnLeft(void);
@@ -125,6 +126,7 @@ void turnRight(void);
 int turnToDirection(int *direction, int target_direction);
 
 // Colour and Calibration
+void printColourName(int colour);
 int load_calibration(const char *filename, Calibration calibration[]);
 int read_calibrated_colour(Calibration calibration[]);
 void print_colour_readings(void);
