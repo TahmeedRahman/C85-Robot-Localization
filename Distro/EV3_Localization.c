@@ -741,31 +741,24 @@ int driveStraightOnLinePID(int stopAtColour, int stayOnStreet, int direction)
 
         if (stayOnStreet)
         {
-            int street = isOnStreet();
-
-            if (street == 0 && off_street_hits < 2)
-            {
-                off_street_hits++;
-                continue;
-            }
-            else
+            if (isOnStreet())
                 off_street_hits = 0;
+            else
+                off_street_hits++;
 
             if (off_street_hits >= 2)
             {
                 fprintf(stderr, "Off the street twice, recovering...\n");
                 BT_all_stop(1);
 
-                // Search for the street and turn towards it
                 if (!locateAndTurnToStreet())
                 {
                     off_street_hits = 0;
                     continue;
                 }
 
-                fprintf(stderr, "We found the street again ...\n");
+                fprintf(stderr, "We found the street again...\n");
 
-                // Reset gyro and accumulated integral
                 if (BT_read_gyro(GYRO_PORT, 1, &angle, &rate) != 1)
                 {
                     BT_all_stop(1);
