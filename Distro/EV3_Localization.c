@@ -247,7 +247,7 @@ int main(int argc, char *argv[])
     // {
     //     int res = read_colour_still();
     //     printColourName(res);
-    // // }
+    // }
     // int tr, tl, br, bl;
     // scan_intersection(&tl, &tr, &br, &bl);
     // while (1)
@@ -276,6 +276,9 @@ int main(int argc, char *argv[])
     int direction = 0;
 
     robot_localization(&robot_x, &robot_y, &direction);
+
+    fprintf(stderr, "We have localized! Navigating to target ...\n");
+
     go_to_target(robot_x, robot_y, direction, dest_x, dest_y);
 
     // Cleanup and exit - DO NOT WRITE ANY CODE BELOW THIS LINE
@@ -307,20 +310,70 @@ static int median(const int *v, int n)
 }
 
 // Helper function to get color from sensor reading
+// int classify_colour(int R, int G, int B, int A)
+// {
+//     if (A < 5 && (R + G + B) < BLACK_SUM_MAX)
+//         return (1); // black
+//     if (R > YELLOW_MIN && G > YELLOW_MIN && B < 0.6 * (R < G ? R : G))
+//         return (4); // yellow
+//     if (R > RED_MIN && G < 0.5 * R && B < 0.5 * R)
+//         return (5); // red: R high
+//     if (G > R && G > B && A < 5)
+//         return (3); // green
+//     if (B > R && B > G && A < 5)
+//         return (2); // blue
+//     return (6);     // anything else: unknown
+// }
 
 int classify_colour(int R, int G, int B, int A)
 {
-    if (A < 5 && (R + G + B) < BLACK_SUM_MAX)
-        return (1); // black
-    if (R > YELLOW_MIN && G > YELLOW_MIN && B < 0.6 * (R < G ? R : G))
-        return (4); // yellow
-    if (R > RED_MIN && G < 0.5 * R && B < 0.5 * R)
-        return (5); // red: R high
-    if (G > R && G > B && A < 5)
-        return (3); // green
-    if (B > R && B > G && A < 5)
-        return (2); // blue
-    return (6);     // anything else: unknown
+    int rgb[3] = {R, G, B};
+    double sensorSum = R + G + B;
+    double minDistance = -1;
+    int closestColour = 6;
+
+    if (sensorSum == 0)
+        return 0;
+
+    for (int j = 0; j < NUM_COLOURS; j++)
+    {
+        double calibratedSum = calibration[j].red + calibration[j].green + calibration[j].blue;
+
+        if (calibratedSum == 0)
+            continue;
+
+        double dr = (double)rgb[0] / sensorSum - calibration[j].red / calibratedSum;
+        double dg = (double)rgb[1] / sensorSum - calibration[j].green / calibratedSum;
+        double db = (double)rgb[2] / sensorSum - calibration[j].blue / calibratedSum;
+
+        double ambientDifference = (double)A - calibration[j].ambient;
+
+        double distance = dr * dr + dg * dg + db * db + AMBIENT_WEIGHT * ambientDifference * ambientDifference;
+
+        int colour;
+        if (strcmp(calibration[j].name, "Black") == 0)
+            colour = BLACK;
+        else if (strcmp(calibration[j].name, "Blue") == 0)
+            colour = BLUE;
+        else if (strcmp(calibration[j].name, "Green") == 0)
+            colour = GREEN;
+        else if (strcmp(calibration[j].name, "Yellow") == 0)
+            colour = YELLOW;
+        else if (strcmp(calibration[j].name, "Red") == 0)
+            colour = RED;
+        else if (strcmp(calibration[j].name, "White") == 0)
+            colour = WHITE;
+        else
+            continue;
+
+        if (minDistance < 0 || distance < minDistance)
+        {
+            minDistance = distance;
+            closestColour = colour;
+        }
+    }
+
+    return minDistance < 0 ? 0 : closestColour;
 }
 
 // Denoise reading
@@ -482,15 +535,7 @@ void backUpRobotToIntersection()
 // Return 1 if the sensor detects black or yellow (on a street)
 int isOnStreet(void)
 {
-    int R, G, B, A;
-
-    if (BT_read_colour_RGBraw_NXT(COLOUR_PORT, &R, &G, &B, &A) != 1)
-    {
-        return 0;
-    }
-
-    int c = classify_colour(R, G, B, A);
-
+    int c = read_colour_still();
     return (c == BLACK || c == YELLOW);
 }
 
@@ -692,13 +737,6 @@ int driveStraightOnLinePID(int stopAtColour, int stayOnStreet, int direction)
                 }
                 else
                     colour_hits = 0;
-                // colour_hits++;
-
-                // if (colour_hits >= 2)
-                // {
-                //     BT_all_stop(1);
-                //     return stopAtColour;
-                // }
             }
         }
         else
@@ -795,22 +833,17 @@ int find_street(void)
      * bot after calling this function
      */
 
-    int R, G, B, A;
-
-    if (BT_read_colour_RGBraw_NXT(COLOUR_PORT, &R, &G, &B, &A) == 1)
+    int c = read_colour_still();
+    usleep(1000000);
+    if (c == BLACK || c == YELLOW)
     {
-        int c = classify_colour(R, G, B, A);
-        usleep(1000000);
-        if (c == BLACK || c == YELLOW)
-        {
-            fprintf(stderr, "We are already on the road, skipping find street process ...\n");
-            BT_all_stop(1);
-            return 1;
-        }
+        fprintf(stderr, "We are already on the road, skipping find street process ...\n");
+        BT_all_stop(1);
+        return 1;
     }
 
     // Drive till we find a street
-    int status = driveStraightOnLinePID(BLACK, 1, 0);
+    int status = driveStraightOnLinePID(BLACK, 0, 1);
 
     // Found a road, turn onto the road
     if (status == BLACK)
@@ -944,7 +977,7 @@ int scan_intersection(int *tl, int *tr, int *br, int *bl)
     {
         // drive forward
         BT_drive(RIGHT_MOTOR, LEFT_MOTOR, 30);
-        usleep(400000);
+        usleep(450000);
         BT_all_stop(1);
         // Scan left and right
         *(tr) = scan_right(2900000);
@@ -963,12 +996,12 @@ int scan_intersection(int *tl, int *tr, int *br, int *bl)
 
         // Back to intersection
         BT_drive(RIGHT_MOTOR, LEFT_MOTOR, -30);
-        usleep(400000);
+        usleep(450000);
         BT_all_stop(1);
 
         // drive back
         BT_drive(RIGHT_MOTOR, LEFT_MOTOR, -30);
-        usleep(300000);
+        usleep(350000);
         BT_all_stop(1);
         usleep(1000000); // sleep for 1 second
 
@@ -988,7 +1021,7 @@ int scan_intersection(int *tl, int *tr, int *br, int *bl)
 
         // drive back to intersection
         BT_drive(RIGHT_MOTOR, LEFT_MOTOR, 30);
-        usleep(400000);
+        usleep(350000);
         BT_all_stop(1);
 
         fprintf(stderr,
@@ -1140,17 +1173,20 @@ int go_to_target(int robot_x, int robot_y, int direction, int target_x, int targ
         // Turn left/right
         if (target_x > robot_x)
         {
+            fprintf(stderr, "Turning to face Left ...\n");
             target_direction = 1;
         }
         else
         {
+            fprintf(stderr, "Turning to face Right ...\n");
             target_direction = 3;
         }
 
-        fprintf(stderr, "Moving horizontally toward x=%d\n", target_x);
-
         // Turn and drive to the next intersection
+        centerRobotOnRoad();
         turnToDirection(&direction, target_direction);
+
+        fprintf(stderr, "Moving horizontally toward x=%d\n", target_x);
         drive_along_street();
 
         // Update current x coord
@@ -1167,17 +1203,20 @@ int go_to_target(int robot_x, int robot_y, int direction, int target_x, int targ
         // Turn up/down
         if (target_y > robot_y)
         {
+            fprintf(stderr, "Turning to face Down ...\n");
             target_direction = 2;
         }
         else
         {
+            fprintf(stderr, "Turning to face Up ...\n");
             target_direction = 0;
         }
 
-        fprintf(stderr, "Moving vertically toward y=%d\n", target_y);
-
         // Turn and drive to the next intersection
+        centerRobotOnRoad();
         turnToDirection(&direction, target_direction);
+
+        fprintf(stderr, "Moving vertically toward y=%d\n", target_y);
         drive_along_street();
 
         // Update current y coord
@@ -1186,6 +1225,7 @@ int go_to_target(int robot_x, int robot_y, int direction, int target_x, int targ
         fprintf(stderr, "Current position: (%d, %d)\n", robot_x, robot_y);
     }
 
+    fprintf(stderr, "Arrived at target (%d, %d)\n", robot_x, robot_y);
     return 1;
 }
 
@@ -1661,6 +1701,9 @@ void normalize_beliefs(int numIntersections)
 double get_highest_belief_coords(int numIntersections, int *robot_x, int *robot_y, int *direction)
 {
     double highest = beliefs[0][0];
+    *robot_x = 0;
+    *robot_y = 0;
+    *direction = 0;
 
     for (int i = 0; i < numIntersections; i++)
     {

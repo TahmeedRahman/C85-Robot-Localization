@@ -84,7 +84,7 @@ code that you have to complete in order to implement the localization algorithms
 #define CALIBRATION_SAMPLE_COUNT 20
 #define CALIBRATION_OUTPUT_FILE "colour_calibration.csv"
 #define NUM_COLOURS 6
-#define AMBIENT_WEIGHT 0.2
+#define AMBIENT_WEIGHT 0.4
 
 // We have localized when a belief value exceeds this threshold
 #define BELIEF_THRESHOLD 0.4
