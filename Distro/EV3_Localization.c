@@ -529,7 +529,7 @@ void centerRobotOnRoad()
 // Assume the robot's sensor is currently on the wall (red)
 void backUpRobotToIntersection()
 {
-    driveStraightOnLinePID(YELLOW, -1, 1);
+    driveStraightOnLinePID(YELLOW, 0, -1);
 }
 
 // Return 1 if the sensor detects black or yellow (on a street)
@@ -540,53 +540,73 @@ int isOnStreet(void)
 }
 
 // Attempt to locate the street by turning x degrees to the left/right
+// On location, back up, then approach street again on the angle
 int locateAndTurnToStreet(void)
 {
     int baseSearchAngle = 12;
-
+    int backupTime = 500;
     BT_all_stop(1);
 
-    // Turn slightly to the left to find the street
-    printf("Locate road attempt 1 \n");
+    // Attempt 1: Left 12 degrees
+    printf("Locate road attempt 1\n");
     turn_by_gyro(-baseSearchAngle);
     usleep(500000);
+
     if (isOnStreet())
     {
+        turn_by_gyro(baseSearchAngle);
+        drive_straight_pid(backupTime, -1);
+        turn_by_gyro(-baseSearchAngle);
         return 1;
     }
 
-    printf("Locate road attempt 2 \n");
-    // Turn slightly to the right to find the street
+    // Attempt 2: Right 12 degrees
+    printf("Locate road attempt 2\n");
     turn_by_gyro(2 * baseSearchAngle);
     usleep(500000);
+
     if (isOnStreet())
     {
+        turn_by_gyro(-baseSearchAngle);
+        drive_straight_pid(backupTime, -1);
+        turn_by_gyro(baseSearchAngle);
         return 1;
     }
 
-    printf("Locate road attempt 3 \n");
-    // Turn more to the left to find the street
+    // Attempt 3: Left 24 degrees
+    printf("Locate road attempt 3\n");
     turn_by_gyro(-3 * baseSearchAngle);
     usleep(500000);
+
     if (isOnStreet())
     {
+        turn_by_gyro(2 * baseSearchAngle);
+        drive_straight_pid(backupTime, -1);
+        turn_by_gyro(-2 * baseSearchAngle);
         return 1;
     }
 
-    printf("Locate road attempt 4 \n");
-    // Turn more to the right to find the street
+    // Attempt 4: Right 24 degrees
+    printf("Locate road attempt 4\n");
     turn_by_gyro(4 * baseSearchAngle);
     usleep(500000);
+
     if (isOnStreet())
     {
+        turn_by_gyro(-2 * baseSearchAngle);
+        drive_straight_pid(backupTime, -1);
+        turn_by_gyro(2 * baseSearchAngle);
         return 1;
     }
 
-    printf("Cant't locate roate, going back to starting orientation ... \n");
+    printf("Can't locate road, returning to starting orientation...\n");
     turn_by_gyro(-2 * baseSearchAngle);
     usleep(500000);
 
-    fprintf(stderr, "Could not locate street within +/- %d degrees of the initial heading\n", 2 * baseSearchAngle);
+    fprintf(stderr,
+            "Could not locate street within +/- %d degrees of the initial heading\n",
+            2 * baseSearchAngle);
+
     return 0;
 }
 
