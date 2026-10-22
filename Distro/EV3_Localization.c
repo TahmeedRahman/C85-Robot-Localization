@@ -251,9 +251,9 @@ int main(int argc, char *argv[])
 
     robot_localization(&robot_x, &robot_y, &direction);
     go_to_target(robot_x, robot_y, direction, dest_x, dest_y);
-
-    // Cleanup and exit - DO NOT WRITE ANY CODE BELOW THIS LINE
-    BT_close();
+    `
+        // Cleanup and exit - DO NOT WRITE ANY CODE BELOW THIS LINE
+        BT_close();
     free(map_image);
     exit(0);
 }
@@ -351,6 +351,8 @@ void printColourName(int colour)
     }
 }
 
+//****************** Movement *******************//
+
 // Turning to target degree helper
 int turn_by_gyro(int target_deg)
 {
@@ -407,8 +409,6 @@ int turnToDirection(int *direction, int target_direction)
     *direction = target_direction;
     return 1;
 }
-
-// Helper PID Controller
 
 void drive(int max_ms, int direction)
 {
@@ -485,6 +485,8 @@ int locateAndTurnToStreet(void)
     fprintf(stderr, "Could not locate street within +/- %d degrees of the initial heading\n", 2 * baseSearchAngle);
     return 0;
 }
+
+//****************** PIDs *******************//
 
 /*
  * PID Controller
@@ -708,6 +710,8 @@ int reset()
     usleep(1000000);
     return 0;
 }
+
+//****************** Main Movement Functions *******************//
 
 /*
 
