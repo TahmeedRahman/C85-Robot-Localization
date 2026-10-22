@@ -274,8 +274,8 @@ int main(int argc, char *argv[])
     int robot_x = 0;
     int robot_y = 0;
     int direction = 0;
-
-    robot_localization(&robot_x, &robot_y, &direction);
+    locateAndTurnToStreet();
+    // robot_localization(&robot_x, &robot_y, &direction);
 
     fprintf(stderr, "We have localized! Navigating to target ...\n");
 
@@ -310,71 +310,71 @@ static int median(const int *v, int n)
 }
 
 // Helper function to get color from sensor reading
-// int classify_colour(int R, int G, int B, int A)
-// {
-//     if (A < 5 && (R + G + B) < BLACK_SUM_MAX)
-//         return (1); // black
-//     if (R > YELLOW_MIN && G > YELLOW_MIN && B < 0.6 * (R < G ? R : G))
-//         return (4); // yellow
-//     if (R > RED_MIN && G < 0.5 * R && B < 0.5 * R)
-//         return (5); // red: R high
-//     if (G > R && G > B && A < 5)
-//         return (3); // green
-//     if (B > R && B > G && A < 5)
-//         return (2); // blue
-//     return (6);     // anything else: unknown
-// }
-
 int classify_colour(int R, int G, int B, int A)
 {
-    int rgb[3] = {R, G, B};
-    double sensorSum = R + G + B;
-    double minDistance = -1;
-    int closestColour = 6;
-
-    if (sensorSum == 0)
-        return 0;
-
-    for (int j = 0; j < NUM_COLOURS; j++)
-    {
-        double calibratedSum = calibration[j].red + calibration[j].green + calibration[j].blue;
-
-        if (calibratedSum == 0)
-            continue;
-
-        double dr = (double)rgb[0] / sensorSum - calibration[j].red / calibratedSum;
-        double dg = (double)rgb[1] / sensorSum - calibration[j].green / calibratedSum;
-        double db = (double)rgb[2] / sensorSum - calibration[j].blue / calibratedSum;
-
-        double ambientDifference = (double)A - calibration[j].ambient;
-
-        double distance = dr * dr + dg * dg + db * db + AMBIENT_WEIGHT * ambientDifference * ambientDifference;
-
-        int colour;
-        if (strcmp(calibration[j].name, "Black") == 0)
-            colour = BLACK;
-        else if (strcmp(calibration[j].name, "Blue") == 0)
-            colour = BLUE;
-        else if (strcmp(calibration[j].name, "Green") == 0)
-            colour = GREEN;
-        else if (strcmp(calibration[j].name, "Yellow") == 0)
-            colour = YELLOW;
-        else if (strcmp(calibration[j].name, "Red") == 0)
-            colour = RED;
-        else if (strcmp(calibration[j].name, "White") == 0)
-            colour = WHITE;
-        else
-            continue;
-
-        if (minDistance < 0 || distance < minDistance)
-        {
-            minDistance = distance;
-            closestColour = colour;
-        }
-    }
-
-    return minDistance < 0 ? 0 : closestColour;
+    if (A < 5 && (R + G + B) < BLACK_SUM_MAX)
+        return (1); // black
+    if (R > YELLOW_MIN && G > YELLOW_MIN && B < 0.6 * (R < G ? R : G))
+        return (4); // yellow
+    if (R > RED_MIN && G < 0.5 * R && B < 0.5 * R)
+        return (5); // red: R high
+    if (G > R && G > B && A < 3)
+        return (3); // green
+    if (B > R && B > G && A < 3)
+        return (2); // blue
+    return (6);     // anything else: unknown
 }
+
+// int classify_colour(int R, int G, int B, int A)
+// {
+//     int rgb[3] = {R, G, B};
+//     double sensorSum = R + G + B;
+//     double minDistance = -1;
+//     int closestColour = 6;
+
+//     if (sensorSum == 0)
+//         return 0;
+
+//     for (int j = 0; j < NUM_COLOURS; j++)
+//     {
+//         double calibratedSum = calibration[j].red + calibration[j].green + calibration[j].blue;
+
+//         if (calibratedSum == 0)
+//             continue;
+
+//         double dr = (double)rgb[0] / sensorSum - calibration[j].red / calibratedSum;
+//         double dg = (double)rgb[1] / sensorSum - calibration[j].green / calibratedSum;
+//         double db = (double)rgb[2] / sensorSum - calibration[j].blue / calibratedSum;
+
+//         double ambientDifference = (double)A - calibration[j].ambient;
+
+//         double distance = dr * dr + dg * dg + db * db + AMBIENT_WEIGHT * ambientDifference * ambientDifference;
+
+//         int colour;
+//         if (strcmp(calibration[j].name, "Black") == 0)
+//             colour = BLACK;
+//         else if (strcmp(calibration[j].name, "Blue") == 0)
+//             colour = BLUE;
+//         else if (strcmp(calibration[j].name, "Green") == 0)
+//             colour = GREEN;
+//         else if (strcmp(calibration[j].name, "Yellow") == 0)
+//             colour = YELLOW;
+//         else if (strcmp(calibration[j].name, "Red") == 0)
+//             colour = RED;
+//         else if (strcmp(calibration[j].name, "White") == 0)
+//             colour = WHITE;
+//         else
+//             continue;
+
+//         if (minDistance < 0 || distance < minDistance)
+//         {
+//             minDistance = distance;
+//             closestColour = colour;
+//         }
+//     }
+
+//     return minDistance < 0 ? 0 : closestColour;
+// }
 
 // Denoise reading
 int read_colour_still(void)
@@ -536,6 +536,8 @@ void backUpRobotToIntersection()
 int isOnStreet(void)
 {
     int c = read_colour_still();
+    usleep(500000);
+    printColourName(c);
     return (c == BLACK || c == YELLOW);
 }
 
@@ -581,7 +583,7 @@ int locateAndTurnToStreet(void)
     if (isOnStreet())
     {
         turn_by_gyro(2 * baseSearchAngle);
-        drive_straight_pid(backupTime, -1);
+        drive_straight_pid(backupTime / 2, -1);
         turn_by_gyro(-2 * baseSearchAngle);
         return 1;
     }
@@ -594,7 +596,7 @@ int locateAndTurnToStreet(void)
     if (isOnStreet())
     {
         turn_by_gyro(-2 * baseSearchAngle);
-        drive_straight_pid(backupTime, -1);
+        drive_straight_pid(backupTime / 2, -1);
         turn_by_gyro(2 * baseSearchAngle);
         return 1;
     }
@@ -694,6 +696,7 @@ int driveStraightOnLinePID(int stopAtColour, int stayOnStreet, int direction)
     int angle = 0, rate = 0;
     int R, G, B, A;
     int colour_hits = 0;
+    int off_street_hits = 0;
     int search_dir = -1;
     double integral = 0, u;
     int lp, rp;
@@ -769,13 +772,21 @@ int driveStraightOnLinePID(int stopAtColour, int stayOnStreet, int direction)
             int street = isOnStreet();
 
             if (street == 0)
+                off_street_hits++;
+            else
+                off_street_hits = 0;
+
+            if (off_street_hits >= 2)
             {
-                fprintf(stderr, "Off the street, recovering...\n");
+                fprintf(stderr, "Off the street twice, recovering...\n");
                 BT_all_stop(1);
 
-                // Search for the street, and rotate such that we face more towards it
+                // Search for the street and turn towards it
                 if (!locateAndTurnToStreet())
+                {
+                    off_street_hits = 0;
                     continue;
+                }
 
                 fprintf(stderr, "We found the street again ...\n");
 
@@ -787,9 +798,7 @@ int driveStraightOnLinePID(int stopAtColour, int stayOnStreet, int direction)
                 }
 
                 integral = 0;
-
-                // // Drive a bit forward to get back onto the street
-                // drive_straight_pid(100, direction);
+                off_street_hits = 0;
                 continue;
             }
         }
@@ -991,57 +1000,53 @@ int scan_intersection(int *tl, int *tr, int *br, int *bl)
 
     fprintf(stderr, "Starting intersection scan ...\n");
 
-    // Return invalid colour values, and a zero to indicate failure (you will replace this with your code)
     int color = read_colour_still();
+
     if (color == 4)
     {
-        // drive forward
-        BT_drive(RIGHT_MOTOR, LEFT_MOTOR, 30);
-        usleep(450000);
+        // Drive forward
+        drive_straight_pid(450, 1);
         BT_all_stop(1);
-        // Scan left and right
+
+        // Scan top right and top left
         *(tr) = scan_right(2900000);
-        usleep(1000000); // sleep for 1 second
+        usleep(1000000);
         scan_left(2900000);
-        usleep(1000000); // sleep for 1 second
+        usleep(1000000);
 
         turn_by_gyro(-15);
 
         *(tl) = scan_left(2200000);
-        // reset();
         scan_right(2200000);
-        usleep(1000000); // sleep for 1 second
+        usleep(1000000);
 
         turn_by_gyro(15);
 
-        // Back to intersection
-        BT_drive(RIGHT_MOTOR, LEFT_MOTOR, -30);
-        usleep(450000);
+        // Return to intersection
+        drive_straight_pid(450, -1);
         BT_all_stop(1);
 
-        // drive back
-        BT_drive(RIGHT_MOTOR, LEFT_MOTOR, -30);
-        usleep(350000);
+        // Drive back
+        drive_straight_pid(350, -1);
         BT_all_stop(1);
-        usleep(1000000); // sleep for 1 second
+        usleep(1000000);
 
-        // scan back right
+        // Scan bottom right and bottom left
         *(br) = scan_right(2900000);
-        usleep(1000000); // sleep for 1 second
+        usleep(1000000);
         scan_left(2900000);
+        usleep(1000000);
 
-        usleep(1000000); // sleep for 1 second
-
-        // scan  back left
         turn_by_gyro(-15);
+
         *(bl) = scan_left(2200000);
         scan_right(2200000);
         usleep(1000000);
+
         turn_by_gyro(15);
 
-        // drive back to intersection
-        BT_drive(RIGHT_MOTOR, LEFT_MOTOR, 30);
-        usleep(350000);
+        // Drive back to intersection
+        drive_straight_pid(350, 1);
         BT_all_stop(1);
 
         fprintf(stderr,
@@ -1055,6 +1060,7 @@ int scan_intersection(int *tl, int *tr, int *br, int *bl)
     else
     {
         fprintf(stderr, "Robot is not on a yellow intersection, scan failed ...\n");
+        return 0;
     }
 }
 
