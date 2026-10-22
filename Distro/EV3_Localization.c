@@ -274,8 +274,8 @@ int main(int argc, char *argv[])
     int robot_x = 0;
     int robot_y = 0;
     int direction = 0;
-    locateAndTurnToStreet();
-    // robot_localization(&robot_x, &robot_y, &direction);
+
+    robot_localization(&robot_x, &robot_y, &direction);
 
     fprintf(stderr, "We have localized! Navigating to target ...\n");
 
@@ -537,7 +537,7 @@ int isOnStreet(void)
 {
     int c = read_colour_still();
     usleep(500000);
-    printColourName(c);
+    // printColourName(c);
     return (c == BLACK || c == YELLOW);
 }
 
@@ -713,38 +713,10 @@ int driveStraightOnLinePID(int stopAtColour, int stayOnStreet, int direction)
 
     while (1)
     {
-        if (BT_read_gyro(GYRO_PORT, 0, &angle, &rate) != 1)
-        {
-            BT_all_stop(1);
-            return -1;
-        }
-
-        double err = GYRO_SIGN * angle;
-
-        integral += err;
-        if (integral > I_LIMIT)
-            integral = I_LIMIT;
-        if (integral < -I_LIMIT)
-            integral = -I_LIMIT;
-
-        u = KP * err + KI * integral + KD * GYRO_SIGN * rate;
-
-        lp = (int)(base - u);
-        rp = (int)(base + u);
-
-        if (lp > 100)
-            lp = 100;
-        if (lp < -100)
-            lp = -100;
-        if (rp > 100)
-            rp = 100;
-        if (rp < -100)
-            rp = -100;
-
         if (BT_read_colour_RGBraw_NXT(COLOUR_PORT, &R, &G, &B, &A) == 1)
         {
             int c = classify_colour(R, G, B, A);
-
+            printColourName(c);
             if (c == RED)
             {
                 BT_all_stop(1);
@@ -771,8 +743,11 @@ int driveStraightOnLinePID(int stopAtColour, int stayOnStreet, int direction)
         {
             int street = isOnStreet();
 
-            if (street == 0)
+            if (street == 0 && off_street_hits < 2)
+            {
                 off_street_hits++;
+                continue;
+            }
             else
                 off_street_hits = 0;
 
@@ -802,6 +777,34 @@ int driveStraightOnLinePID(int stopAtColour, int stayOnStreet, int direction)
                 continue;
             }
         }
+
+        if (BT_read_gyro(GYRO_PORT, 0, &angle, &rate) != 1)
+        {
+            BT_all_stop(1);
+            return -1;
+        }
+
+        double err = GYRO_SIGN * angle;
+
+        integral += err;
+        if (integral > I_LIMIT)
+            integral = I_LIMIT;
+        if (integral < -I_LIMIT)
+            integral = -I_LIMIT;
+
+        u = KP * err + KI * integral + KD * GYRO_SIGN * rate;
+
+        lp = (int)(base - u);
+        rp = (int)(base + u);
+
+        if (lp > 100)
+            lp = 100;
+        if (lp < -100)
+            lp = -100;
+        if (rp > 100)
+            rp = 100;
+        if (rp < -100)
+            rp = -100;
 
         BT_turn(LEFT_MOTOR, lp, RIGHT_MOTOR, rp);
         usleep(10000);
@@ -1001,6 +1004,15 @@ int scan_intersection(int *tl, int *tr, int *br, int *bl)
     fprintf(stderr, "Starting intersection scan ...\n");
 
     int color = read_colour_still();
+
+    if (color != 4)
+    {
+        fprintf(stderr, "We aren't stopped on yellow, did we overshoot? Backing up a bit ...\n");
+        drive_straight_pid(200, -1);
+        driveStraightOnLinePID(YELLOW, 1, 1);
+    }
+
+    color = read_colour_still();
 
     if (color == 4)
     {
