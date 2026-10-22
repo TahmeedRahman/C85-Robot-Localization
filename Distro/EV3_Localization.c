@@ -231,19 +231,45 @@ int main(int argc, char *argv[])
      *
      *******************************************************************************************************************************/
 
-    driveStraightOnLinePID(YELLOW, 1, 1);
-    centerRobotOnRoad();
-    turnRight();
+    // driveStraightOnLinePID(YELLOW, 1, 1);
+    // centerRobotOnRoad();
+    // turnRight();
 
-    driveStraightOnLinePID(YELLOW, 1, 1);
-    centerRobotOnRoad();
-    turnRight();
+    // printBeliefs();
+    // exit(0);
+    // printf("%d\n", map[0][0]);
+    // printf("%d\n", map[0][1]);
+    // printf("%d\n", map[0][2]);
+    // printf("%d\n", map[0][3]);
+    // exit(0);
 
-    driveStraightOnLinePID(YELLOW, 1, 1);
-    centerRobotOnRoad();
-    turnRight();
+    // while (1)
+    // {
+    //     int res = read_colour_still();
+    //     printColourName(res);
+    // // }
+    // int tr, tl, br, bl;
+    // scan_intersection(&tl, &tr, &br, &bl);
+    // while (1)
+    // {
 
-    exit(0);
+    //     fprintf(stderr, "Press Enter to drive to next intersection...\n");
+    //     getchar();
+    //     fprintf(stderr, "Driving to next intersection ... \n");
+    //     driveStraightOnLinePID(YELLOW, 1, 1);
+
+    //     fprintf(stderr, "Press Enter to center robot on intersection...\n");
+    //     getchar();
+    //     fprintf(stderr, "Centering robot on intersection ... \n");
+    //     centerRobotOnRoad();
+
+    //     fprintf(stderr, "Press Enter to turn right on intersection...\n");
+    //     getchar();
+    //     fprintf(stderr, "Turning right on intersection ... \n");
+    //     turnRight();
+    // }
+
+    // exit(0);
 
     int robot_x = 0;
     int robot_y = 0;
@@ -251,9 +277,9 @@ int main(int argc, char *argv[])
 
     robot_localization(&robot_x, &robot_y, &direction);
     go_to_target(robot_x, robot_y, direction, dest_x, dest_y);
-    `
-        // Cleanup and exit - DO NOT WRITE ANY CODE BELOW THIS LINE
-        BT_close();
+
+    // Cleanup and exit - DO NOT WRITE ANY CODE BELOW THIS LINE
+    BT_close();
     free(map_image);
     exit(0);
 }
@@ -290,9 +316,9 @@ int classify_colour(int R, int G, int B, int A)
         return (4); // yellow
     if (R > RED_MIN && G < 0.5 * R && B < 0.5 * R)
         return (5); // red: R high
-    if (G > R && G > B && A < 3)
+    if (G > R && G > B && A < 5)
         return (3); // green
-    if (B > R && B > G && A < 3)
+    if (B > R && B > G && A < 5)
         return (2); // blue
     return (6);     // anything else: unknown
 }
@@ -351,6 +377,27 @@ void printColourName(int colour)
     }
 }
 
+const char *getColourName(int colour)
+{
+    switch (colour)
+    {
+    case 1:
+        return "Black";
+    case 2:
+        return "Blue";
+    case 3:
+        return "Green";
+    case 4:
+        return "Yellow";
+    case 5:
+        return "Red";
+    case 6:
+        return "White";
+    default:
+        return "Unknown";
+    }
+}
+
 //****************** Movement *******************//
 
 // Turning to target degree helper
@@ -369,7 +416,7 @@ int turn_by_gyro(int target_deg)
             BT_all_stop(1);
             return (-1);
         }
-        printf("Current angle: %d\n, rate: %d\n", angle, rate);
+        // printf("Current angle: %d\n, rate: %d\n", angle, rate);
         if (dir * GYRO_SIGN * angle >= abs(target_deg) - OVERSHOOT)
             break;
         BT_turn(LEFT_MOTOR, dir * 25, RIGHT_MOTOR, -dir * 25);
@@ -450,37 +497,49 @@ int isOnStreet(void)
 // Attempt to locate the street by turning x degrees to the left/right
 int locateAndTurnToStreet(void)
 {
-    int baseSearchAngle = 10;
+    int baseSearchAngle = 12;
 
     BT_all_stop(1);
 
     // Turn slightly to the left to find the street
+    printf("Locate road attempt 1 \n");
     turn_by_gyro(-baseSearchAngle);
+    usleep(500000);
     if (isOnStreet())
     {
         return 1;
     }
 
+    printf("Locate road attempt 2 \n");
     // Turn slightly to the right to find the street
     turn_by_gyro(2 * baseSearchAngle);
+    usleep(500000);
     if (isOnStreet())
     {
         return 1;
     }
 
+    printf("Locate road attempt 3 \n");
     // Turn more to the left to find the street
     turn_by_gyro(-3 * baseSearchAngle);
+    usleep(500000);
     if (isOnStreet())
     {
         return 1;
     }
 
+    printf("Locate road attempt 4 \n");
     // Turn more to the right to find the street
     turn_by_gyro(4 * baseSearchAngle);
+    usleep(500000);
     if (isOnStreet())
     {
         return 1;
     }
+
+    printf("Cant't locate roate, going back to starting orientation ... \n");
+    turn_by_gyro(-2 * baseSearchAngle);
+    usleep(500000);
 
     fprintf(stderr, "Could not locate street within +/- %d degrees of the initial heading\n", 2 * baseSearchAngle);
     return 0;
@@ -627,15 +686,19 @@ int driveStraightOnLinePID(int stopAtColour, int stayOnStreet, int direction)
             if (stopAtColour != 0)
             {
                 if (c == stopAtColour)
-                    colour_hits++;
-                else
-                    colour_hits = 0;
-
-                if (colour_hits >= 2)
                 {
                     BT_all_stop(1);
                     return stopAtColour;
                 }
+                else
+                    colour_hits = 0;
+                // colour_hits++;
+
+                // if (colour_hits >= 2)
+                // {
+                //     BT_all_stop(1);
+                //     return stopAtColour;
+                // }
             }
         }
         else
@@ -650,12 +713,13 @@ int driveStraightOnLinePID(int stopAtColour, int stayOnStreet, int direction)
             if (street == 0)
             {
                 fprintf(stderr, "Off the street, recovering...\n");
-
                 BT_all_stop(1);
 
                 // Search for the street, and rotate such that we face more towards it
                 if (!locateAndTurnToStreet())
-                    return -1;
+                    continue;
+
+                fprintf(stderr, "We found the street again ...\n");
 
                 // Reset gyro and accumulated integral
                 if (BT_read_gyro(GYRO_PORT, 1, &angle, &rate) != 1)
@@ -666,8 +730,8 @@ int driveStraightOnLinePID(int stopAtColour, int stayOnStreet, int direction)
 
                 integral = 0;
 
-                // Drive a bit forward to get back onto the street
-                drive_straight_pid(500, direction);
+                // // Drive a bit forward to get back onto the street
+                // drive_straight_pid(100, direction);
                 continue;
             }
         }
@@ -730,6 +794,20 @@ int find_street(void)
      * You can use the return value to indicate success or failure, or to inform the rest of your code of the state of your
      * bot after calling this function
      */
+
+    int R, G, B, A;
+
+    if (BT_read_colour_RGBraw_NXT(COLOUR_PORT, &R, &G, &B, &A) == 1)
+    {
+        int c = classify_colour(R, G, B, A);
+        usleep(1000000);
+        if (c == BLACK || c == YELLOW)
+        {
+            fprintf(stderr, "We are already on the road, skipping find street process ...\n");
+            BT_all_stop(1);
+            return 1;
+        }
+    }
 
     // Drive till we find a street
     int status = driveStraightOnLinePID(BLACK, 1, 0);
@@ -866,20 +944,26 @@ int scan_intersection(int *tl, int *tr, int *br, int *bl)
     {
         // drive forward
         BT_drive(RIGHT_MOTOR, LEFT_MOTOR, 30);
-        usleep(300000);
+        usleep(400000);
         BT_all_stop(1);
         // Scan left and right
         *(tr) = scan_right(2900000);
         usleep(1000000); // sleep for 1 second
-        scan_left(2900000) != 1;
+        scan_left(2900000);
+        usleep(1000000); // sleep for 1 second
+
+        turn_by_gyro(-15);
+
         *(tl) = scan_left(2200000);
         // reset();
         scan_right(2200000);
         usleep(1000000); // sleep for 1 second
 
+        turn_by_gyro(15);
+
         // Back to intersection
         BT_drive(RIGHT_MOTOR, LEFT_MOTOR, -30);
-        usleep(300000);
+        usleep(400000);
         BT_all_stop(1);
 
         // drive back
@@ -887,20 +971,33 @@ int scan_intersection(int *tl, int *tr, int *br, int *bl)
         usleep(300000);
         BT_all_stop(1);
         usleep(1000000); // sleep for 1 second
+
+        // scan back right
         *(br) = scan_right(2900000);
         usleep(1000000); // sleep for 1 second
-        if (scan_left(2900000) != 1)
-        {
-            reset();
-        }
+        scan_left(2900000);
+
+        usleep(1000000); // sleep for 1 second
+
+        // scan  back left
+        turn_by_gyro(-15);
         *(bl) = scan_left(2200000);
         scan_right(2200000);
         usleep(1000000);
+        turn_by_gyro(15);
+
+        // drive back to intersection
         BT_drive(RIGHT_MOTOR, LEFT_MOTOR, 30);
-        usleep(300000);
+        usleep(400000);
         BT_all_stop(1);
 
-        fprintf(stderr, "Intersection scanned: TL=%d, TR=%d, BR=%d, BL=%d\n", *tl, *tr, *br, *bl);
+        fprintf(stderr,
+                "Intersection scanned: TL=%s, TR=%s, BR=%s, BL=%s\n",
+                getColourName(*tl),
+                getColourName(*tr),
+                getColourName(*br),
+                getColourName(*bl));
+        return 1;
     }
     else
     {
@@ -978,20 +1075,22 @@ int robot_localization(int *robot_x, int *robot_y, int *direction)
         // Drive to the next intersection available
         int angleRotated = drive_along_street();
 
-        shiftBeliefs(numIntersections);
-
         if (angleRotated)
         {
             // Rotate belief values by angleRotated if the robot has changed direction while driving
             rotate_beliefs(numIntersections, angleRotated);
         }
 
+        shiftBeliefs(numIntersections);
+
         // Scan all 4 colours on the intersection
-        scan_intersection(&topLeft, &topRight, &backRight, &backLeft);
+        int c = scan_intersection(&topLeft, &topRight, &backRight, &backLeft);
+        fprintf(stderr, "we got to here %d \n", c);
 
         // Update beliefs based on values from scanned intersections
         update_beliefs_based_on_intersection(numIntersections, topLeft, topRight, backRight, backLeft);
 
+        printf("we got to here 2\n");
         normalize_beliefs(numIntersections);
         printBeliefs();
 
@@ -1003,6 +1102,8 @@ int robot_localization(int *robot_x, int *robot_y, int *direction)
             return 1;
         }
 
+        // Drive forwards a bit to not scan the same intersection again
+        centerRobotOnRoad();
         // Repeat
     }
 
@@ -1728,6 +1829,10 @@ void initializeBeliefs(double beliefArray[][4])
 }
 
 // Logging method for belief map visualization
+// Top left is Up
+// Top right is Right
+// Bottom right is Bottom
+// Bottom left is Left
 void printBeliefs(void)
 {
     for (int y = 0; y < sy; y++)
@@ -1735,28 +1840,27 @@ void printBeliefs(void)
         for (int x = 0; x < sx; x++)
         {
             int i = y * sx + x;
-
-            printf("%d   %d", beliefs[i][0], beliefs[i][1]);
+            printf("%8.6f %8.6f", beliefs[i][0], beliefs[i][1]);
             if (x < sx - 1)
-                printf("     ");
+                printf(" | ");
         }
         printf("\n");
 
+        // Print aligned cell borders
         for (int x = 0; x < sx; x++)
         {
-            printf("  +  ");
+            printf("-----------------");
             if (x < sx - 1)
-                printf("-----");
+                printf("+");
         }
         printf("\n");
 
         for (int x = 0; x < sx; x++)
         {
             int i = y * sx + x;
-
-            printf("%d   %d", beliefs[i][3], beliefs[i][2]);
+            printf("%8.6f %8.6f", beliefs[i][3], beliefs[i][2]);
             if (x < sx - 1)
-                printf("     ");
+                printf(" | ");
         }
         printf("\n\n");
     }

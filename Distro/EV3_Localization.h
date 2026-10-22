@@ -134,6 +134,7 @@ int isOnStreet(void);
 int locateAndTurnToStreet(void);
 
 // Colour and Calibration
+int read_colour_still(void);
 void printColourName(int colour);
 int load_calibration(const char *filename, Calibration calibration[]);
 int read_calibrated_colour(Calibration calibration[]);
