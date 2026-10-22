@@ -1,4 +1,3 @@
-
 #include "EV3_Localization.h"
 
 int main(void)
@@ -10,7 +9,7 @@ int main(void)
         "Blue",
         "Green",
         "White"};
-    int rgb[3];
+    int r, g, b, a;
     FILE *file;
 
     if (BT_open(HEXKEY) != 0)
@@ -34,6 +33,9 @@ int main(void)
         long red_total = 0;
         long green_total = 0;
         long blue_total = 0;
+        long ambient_total = 0;
+        int samples = 0;
+        int tries = 0;
 
         printf("\n Hover the colour sensor over %s \n", colours[i]);
         printf("Press ENTER to calibrate");
@@ -43,22 +45,37 @@ int main(void)
         {
         }
 
-        for (int j = 0; j < CALIBRATION_SAMPLE_COUNT; j++)
+        while (samples < CALIBRATION_SAMPLE_COUNT &&
+               tries < 2 * CALIBRATION_SAMPLE_COUNT)
         {
-            BT_read_colour_sensor_RGB(COLOUR_PORT, rgb);
+            tries++;
 
-            red_total += rgb[0];
-            green_total += rgb[1];
-            blue_total += rgb[2];
+            if (BT_read_colour_RGBraw_NXT(COLOUR_PORT, &r, &g, &b, &a) == 1)
+            {
+                red_total += r;
+                green_total += g;
+                blue_total += b;
+                ambient_total += a;
+                samples++;
+            }
 
             usleep(100000);
         }
 
-        fprintf(file, "%s,%.2f,%.2f,%.2f\n",
+        if (samples == 0)
+        {
+            fprintf(stderr, "Failed to read colour sensor for %s\n", colours[i]);
+            fclose(file);
+            BT_close();
+            exit(1);
+        }
+
+        fprintf(file, "%s,%.2f,%.2f,%.2f,%.2f\n",
                 colours[i],
-                (double)red_total / CALIBRATION_SAMPLE_COUNT,
-                (double)green_total / CALIBRATION_SAMPLE_COUNT,
-                (double)blue_total / CALIBRATION_SAMPLE_COUNT);
+                (double)red_total / samples,
+                (double)green_total / samples,
+                (double)blue_total / samples,
+                (double)ambient_total / samples);
 
         fflush(file);
 

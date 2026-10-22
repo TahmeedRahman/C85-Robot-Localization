@@ -91,11 +91,11 @@
 #define YELLOW_MIN 300
 #define RED_MIN 300
 
-#define BASE_POWER 30
+#define BASE_POWER 25
 #define KP 2.0
 #define KI 0.0
 #define KD 0.0
-#define LOOP_MS 50
+// #define LOOP_MS 50
 #define I_LIMIT 20.0
 #define GYRO_SIGN 1
 
@@ -114,6 +114,8 @@ int map[400][4];        // This holds the representation of the map, up to 20x20
                         // intersection.
 int sx, sy;             // Size of the map (number of intersections along x and y)
 double beliefs[400][4]; // Beliefs for each location and motion direction
+
+Calibration calibration[NUM_COLOURS];
 
 int main(int argc, char *argv[])
 {
@@ -143,16 +145,15 @@ int main(int argc, char *argv[])
     }
 
     // Read calibrated colour values for comparison during runtime
-    Calibration calibration[NUM_COLOURS];
-
     int calibration_count = load_calibration(CALIBRATION_OUTPUT_FILE, calibration);
     if (calibration_count == 0)
     {
         fprintf(stderr, "Unable to load colour calibration\n");
-        exit(1);
+        exit(0);
     }
     else if (calibration_count == -1)
     {
+        exit(0);
         // Optional, make some sort of fallback to not use read_calibrated_colour
     }
 
@@ -191,26 +192,8 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    // Temp logging
     fprintf(stderr, "Map size: %d, %d \n", sx, sy);
-
     fprintf(stderr, "All set, ready to go! \n");
-
-    // drive_straight_pid(1000, 0, 1);
-
-    // int status = drive_along_street();
-    // if(status == 1){
-    //     drive_straight_pid(300, 0, 1);
-    //     turn_by_gyro(360);
-    //     drive_straight_pid(450, 0, -1);
-    // }
-
-    turn_by_gyro(180);
-
-    // print_colour_readings();
-    //  //drive_along_street();
-    // int top_left, top_right, bottom_right, bottom_left;
-    // scan_intersection(&top_left, &top_right, &bottom_right, &bottom_left);
 
     /*******************************************************************************************************************************
      *
@@ -248,11 +231,54 @@ int main(int argc, char *argv[])
      *
      *******************************************************************************************************************************/
 
+    // driveStraightOnLinePID(YELLOW, 1, 1);
+    // centerRobotOnRoad();
+    // turnRight();
+
+    // printBeliefs();
+    // exit(0);
+    // printf("%d\n", map[0][0]);
+    // printf("%d\n", map[0][1]);
+    // printf("%d\n", map[0][2]);
+    // printf("%d\n", map[0][3]);
+    // exit(0);
+
+    // while (1)
+    // {
+    //     int res = read_colour_still();
+    //     printColourName(res);
+    // }
+    // int tr, tl, br, bl;
+    // scan_intersection(&tl, &tr, &br, &bl);
+    // while (1)
+    // {
+
+    //     fprintf(stderr, "Press Enter to drive to next intersection...\n");
+    //     getchar();
+    //     fprintf(stderr, "Driving to next intersection ... \n");
+    //     driveStraightOnLinePID(YELLOW, 1, 1);
+
+    //     fprintf(stderr, "Press Enter to center robot on intersection...\n");
+    //     getchar();
+    //     fprintf(stderr, "Centering robot on intersection ... \n");
+    //     centerRobotOnRoad();
+
+    //     fprintf(stderr, "Press Enter to turn right on intersection...\n");
+    //     getchar();
+    //     fprintf(stderr, "Turning right on intersection ... \n");
+    //     turnRight();
+    // }
+
+    // exit(0);
+
     int robot_x = 0;
     int robot_y = 0;
     int direction = 0;
 
     robot_localization(&robot_x, &robot_y, &direction);
+
+    fprintf(stderr, "We have localized! Navigating to target ...\n");
+
     go_to_target(robot_x, robot_y, direction, dest_x, dest_y);
 
     // Cleanup and exit - DO NOT WRITE ANY CODE BELOW THIS LINE
@@ -284,26 +310,73 @@ static int median(const int *v, int n)
 }
 
 // Helper function to get color from sensor reading
+// int classify_colour(int R, int G, int B, int A)
+// {
+//     if (A < 5 && (R + G + B) < BLACK_SUM_MAX)
+//         return (1); // black
+//     if (R > YELLOW_MIN && G > YELLOW_MIN && B < 0.6 * (R < G ? R : G))
+//         return (4); // yellow
+//     if (R > RED_MIN && G < 0.5 * R && B < 0.5 * R)
+//         return (5); // red: R high
+//     if (G > R && G > B && A < 5)
+//         return (3); // green
+//     if (B > R && B > G && A < 5)
+//         return (2); // blue
+//     return (6);     // anything else: unknown
+// }
 
 int classify_colour(int R, int G, int B, int A)
 {
-    if (A < 5 && (R + G + B) < BLACK_SUM_MAX)
-        return (1); // black
-    if (R > YELLOW_MIN && G > YELLOW_MIN && B < 0.6 * (R < G ? R : G))
-        return (4); // yellow
-    if (R > RED_MIN && G < 0.5 * R && B < 0.5 * R)
-        return (5); // red: R high
-    if (G > R && G > B && A < 3)
-        return (3); // green
-    if (B > R && B > G && A < 3)
-        return (2); // blue
-    return (6);     // anything else: unknown
+    int rgb[3] = {R, G, B};
+    double sensorSum = R + G + B;
+    double minDistance = -1;
+    int closestColour = 6;
+
+    if (sensorSum == 0)
+        return 0;
+
+    for (int j = 0; j < NUM_COLOURS; j++)
+    {
+        double calibratedSum = calibration[j].red + calibration[j].green + calibration[j].blue;
+
+        if (calibratedSum == 0)
+            continue;
+
+        double dr = (double)rgb[0] / sensorSum - calibration[j].red / calibratedSum;
+        double dg = (double)rgb[1] / sensorSum - calibration[j].green / calibratedSum;
+        double db = (double)rgb[2] / sensorSum - calibration[j].blue / calibratedSum;
+
+        double ambientDifference = (double)A - calibration[j].ambient;
+
+        double distance = dr * dr + dg * dg + db * db + AMBIENT_WEIGHT * ambientDifference * ambientDifference;
+
+        int colour;
+        if (strcmp(calibration[j].name, "Black") == 0)
+            colour = BLACK;
+        else if (strcmp(calibration[j].name, "Blue") == 0)
+            colour = BLUE;
+        else if (strcmp(calibration[j].name, "Green") == 0)
+            colour = GREEN;
+        else if (strcmp(calibration[j].name, "Yellow") == 0)
+            colour = YELLOW;
+        else if (strcmp(calibration[j].name, "Red") == 0)
+            colour = RED;
+        else if (strcmp(calibration[j].name, "White") == 0)
+            colour = WHITE;
+        else
+            continue;
+
+        if (minDistance < 0 || distance < minDistance)
+        {
+            minDistance = distance;
+            closestColour = colour;
+        }
+    }
+
+    return minDistance < 0 ? 0 : closestColour;
 }
 
 // Denoise reading
-// TODO: Use read_calibrated_colour() instead of BT_read_colour_RGBraw_NXT
-// TODO: read_calibrated_colour() currently uses BT_read_colour_sensor_RGB intead of BT_read_colour_RGBraw_NXT. **** Fix this ****
-// Actually just dont use this at all, update read_calibrated_colour() to take STILL_SAMPLES and use the return value of that instead
 int read_colour_still(void)
 {
     int R[MAX_SAMPLES], G[MAX_SAMPLES], B[MAX_SAMPLES], A[MAX_SAMPLES], cls[MAX_SAMPLES];
@@ -329,62 +402,56 @@ int read_colour_still(void)
     return (c);
 }
 
-/*
-    Read current colour and print
-    1 -  Black
-    2 -  Blue
-    3 -  Green
-    4 -  Yellow
-    5 -  Red
-    6 -  White
-*/
-void print_colour_readings(void)
+void printColourName(int colour)
 {
-    int R, G, B, A;
-    int index;
-    char *color;
-    int HR = 0, HB = 0, HG = 0, HA = 0;
-    for (int i = 0; i < 200; i++)
+    switch (colour)
     {
-        index = read_colour_still();
-        if (index != -1)
-        {
-            // if (BT_read_colour_RGBraw_NXT(COLOUR_PORT,&R,&G,&B,&A)==1){
-            //   HR = (R > HR) ? R : HR;
-            //   HB = (B > HB) ? B : HB;
-            //   HG = (G > HG) ? G : HG;
-            //   HA = (A > HA) ? A : HA;
-            // index = classify_colour(R,G,B,A);
-            switch (index)
-            {
-            case 1:
-                color = "BLACK";
-                break;
-            case 2:
-                color = "BLUE";
-                break;
-            case 3:
-                color = "GREEN";
-                break;
-            case 4:
-                color = "YELLOW";
-                break;
-            case 5:
-                color = "RED";
-                break;
-            case 6:
-                color = "WHITE";
-                break;
-            default:
-                break;
-            }
-            // printf("R=%4d G=%4d B=%4d A=%4d -> colour index %d\n",R,G,B,A,index);
-            printf("Color Detected: %s\n", color);
-            usleep(100000);
-        }
+    case 1:
+        fprintf(stderr, "Black\n");
+        break;
+    case 2:
+        fprintf(stderr, "Blue\n");
+        break;
+    case 3:
+        fprintf(stderr, "Green\n");
+        break;
+    case 4:
+        fprintf(stderr, "Yellow\n");
+        break;
+    case 5:
+        fprintf(stderr, "Red\n");
+        break;
+    case 6:
+        fprintf(stderr, "White\n");
+        break;
+    default:
+        fprintf(stderr, "Unknown colour (%d)\n", colour);
+        break;
     }
-    // printf("Highest Values : R=%4d G=%4d B=%4d A=%4d\n",HR,HG,HB,HA);
 }
+
+const char *getColourName(int colour)
+{
+    switch (colour)
+    {
+    case 1:
+        return "Black";
+    case 2:
+        return "Blue";
+    case 3:
+        return "Green";
+    case 4:
+        return "Yellow";
+    case 5:
+        return "Red";
+    case 6:
+        return "White";
+    default:
+        return "Unknown";
+    }
+}
+
+//****************** Movement *******************//
 
 // Turning to target degree helper
 int turn_by_gyro(int target_deg)
@@ -402,7 +469,7 @@ int turn_by_gyro(int target_deg)
             BT_all_stop(1);
             return (-1);
         }
-        printf("Current angle: %d\n, rate: %d\n", angle, rate);
+        // printf("Current angle: %d\n, rate: %d\n", angle, rate);
         if (dir * GYRO_SIGN * angle >= abs(target_deg) - OVERSHOOT)
             break;
         BT_turn(LEFT_MOTOR, dir * 25, RIGHT_MOTOR, -dir * 25);
@@ -437,46 +504,151 @@ int turnToDirection(int *direction, int target_direction)
         angle += 360;
     }
 
+    turn_by_gyro(angle);
+
     *direction = target_direction;
     return 1;
 }
 
-// Helper PID Controller
+void drive(int max_ms, int direction)
+{
+    int power = direction * BASE_POWER;
+
+    BT_turn(LEFT_MOTOR, power, RIGHT_MOTOR, power);
+    usleep(max_ms * 1000);
+    BT_all_stop(1);
+}
+
+// Assume the robot's sensor is currently on the desired section of road/intersection (yellow/black)
+// Drive such that the robot is centered, allowing for turning
+void centerRobotOnRoad()
+{
+    drive_straight_pid(1000, 1);
+}
+
+// Assume the robot's sensor is currently on the wall (red)
+void backUpRobotToIntersection()
+{
+    driveStraightOnLinePID(YELLOW, 0, -1);
+}
+
+// Return 1 if the sensor detects black or yellow (on a street)
+int isOnStreet(void)
+{
+    int c = read_colour_still();
+    return (c == BLACK || c == YELLOW);
+}
+
+// Attempt to locate the street by turning x degrees to the left/right
+// On location, back up, then approach street again on the angle
+int locateAndTurnToStreet(void)
+{
+    int baseSearchAngle = 12;
+    int backupTime = 500;
+    BT_all_stop(1);
+
+    // Attempt 1: Left 12 degrees
+    printf("Locate road attempt 1\n");
+    turn_by_gyro(-baseSearchAngle);
+    usleep(500000);
+
+    if (isOnStreet())
+    {
+        turn_by_gyro(baseSearchAngle);
+        drive_straight_pid(backupTime, -1);
+        turn_by_gyro(-baseSearchAngle);
+        return 1;
+    }
+
+    // Attempt 2: Right 12 degrees
+    printf("Locate road attempt 2\n");
+    turn_by_gyro(2 * baseSearchAngle);
+    usleep(500000);
+
+    if (isOnStreet())
+    {
+        turn_by_gyro(-baseSearchAngle);
+        drive_straight_pid(backupTime, -1);
+        turn_by_gyro(baseSearchAngle);
+        return 1;
+    }
+
+    // Attempt 3: Left 24 degrees
+    printf("Locate road attempt 3\n");
+    turn_by_gyro(-3 * baseSearchAngle);
+    usleep(500000);
+
+    if (isOnStreet())
+    {
+        turn_by_gyro(2 * baseSearchAngle);
+        drive_straight_pid(backupTime, -1);
+        turn_by_gyro(-2 * baseSearchAngle);
+        return 1;
+    }
+
+    // Attempt 4: Right 24 degrees
+    printf("Locate road attempt 4\n");
+    turn_by_gyro(4 * baseSearchAngle);
+    usleep(500000);
+
+    if (isOnStreet())
+    {
+        turn_by_gyro(-2 * baseSearchAngle);
+        drive_straight_pid(backupTime, -1);
+        turn_by_gyro(2 * baseSearchAngle);
+        return 1;
+    }
+
+    printf("Can't locate road, returning to starting orientation...\n");
+    turn_by_gyro(-2 * baseSearchAngle);
+    usleep(500000);
+
+    fprintf(stderr,
+            "Could not locate street within +/- %d degrees of the initial heading\n",
+            2 * baseSearchAngle);
+
+    return 0;
+}
+
+//****************** PIDs *******************//
 
 /*
  * PID Controller
  *
- * - Stops motors and resets gyro heading before starting
- * - If stop_at_colour is enabled, stops at the first instance of the colour (See mapping) and return 4 (only after two consecutive readings)
+ * - Use this controller for driving in a straight line for x amount of time (good for small shifts in alignment)
  * - direction = 1 to drive fowards, direction = -1 to drive backwards
+ * - No line following or colour detection logic
  *
- * - Stops and returns 5 if red is detected
- * - Stops and returns 0 if the time limit is reached
  */
-int drive_straight_pid(int max_ms, int stop_at_colour, int direction)
+int drive_straight_pid(int max_ms, int direction)
 {
-    int angle = 0, rate = 0, R, G, B, A;
-    int colour_hits = 0;
+    int angle = 0, rate = 0;
     double integral = 0, u;
     int lp, rp;
-    int max_loops = max_ms / LOOP_MS;
     int base = direction * BASE_POWER;
-    int c;
 
+    struct timespec start;
     BT_all_stop(0);
     usleep(500000);
-    if (BT_read_gyro(GYRO_PORT, 1, &angle, &rate) != 1)
-        return (-1); // reset heading to 0
 
-    for (int loops = 0; loops < max_loops; loops++)
+    if (BT_read_gyro(GYRO_PORT, 1, &angle, &rate) != 1)
+    {
+        BT_all_stop(1);
+        return -1;
+    }
+
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
+    while (elapsed_ms_since(start) < max_ms)
     {
         if (BT_read_gyro(GYRO_PORT, 0, &angle, &rate) != 1)
         {
             BT_all_stop(1);
-            return (-1);
+            return -1;
         }
 
         double err = GYRO_SIGN * angle;
+
         integral += err;
         if (integral > I_LIMIT)
             integral = I_LIMIT;
@@ -484,8 +656,10 @@ int drive_straight_pid(int max_ms, int stop_at_colour, int direction)
             integral = -I_LIMIT;
 
         u = KP * err + KI * integral + KD * GYRO_SIGN * rate;
+
         lp = (int)(base - u);
         rp = (int)(base + u);
+
         if (lp > 100)
             lp = 100;
         if (lp < -100)
@@ -495,39 +669,134 @@ int drive_straight_pid(int max_ms, int stop_at_colour, int direction)
         if (rp < -100)
             rp = -100;
 
-        printf("Base Power: %d, lp: %d, rp: %d\n", base, lp, rp);
         BT_turn(LEFT_MOTOR, lp, RIGHT_MOTOR, rp);
+        usleep(10000);
+    }
+
+    BT_all_stop(1);
+    return 0;
+}
+
+/*
+ * PID Controller
+ *
+ * - Use this controller for driving along lines (drive until we reach a certain point)
+ * - If stop_at_colour is enabled, stops at the first instance of the colour (See mapping) and return 4 (only after two consecutive readings)
+ * - If stayOnStreet is enabled, attempt to relocate the street *yellow/black) if we leave it
+ * - direction = 1 to drive fowards, direction = -1 to drive backwards
+ * - Drives infefinitely until we reach x colour or a wall (red)
+ *
+ * - Stops and returns 5 if red is detected
+ * - Stops and returns 0 if the time limit is reached
+ */
+int driveStraightOnLinePID(int stopAtColour, int stayOnStreet, int direction)
+{
+    int angle = 0, rate = 0;
+    int R, G, B, A;
+    int colour_hits = 0;
+    int search_dir = -1;
+    double integral = 0, u;
+    int lp, rp;
+    int base = direction * BASE_POWER;
+
+    BT_all_stop(0);
+    usleep(500000);
+
+    if (BT_read_gyro(GYRO_PORT, 1, &angle, &rate) != 1)
+    {
+        BT_all_stop(1);
+        return -1;
+    }
+
+    while (1)
+    {
+        if (BT_read_gyro(GYRO_PORT, 0, &angle, &rate) != 1)
+        {
+            BT_all_stop(1);
+            return -1;
+        }
+
+        double err = GYRO_SIGN * angle;
+
+        integral += err;
+        if (integral > I_LIMIT)
+            integral = I_LIMIT;
+        if (integral < -I_LIMIT)
+            integral = -I_LIMIT;
+
+        u = KP * err + KI * integral + KD * GYRO_SIGN * rate;
+
+        lp = (int)(base - u);
+        rp = (int)(base + u);
+
+        if (lp > 100)
+            lp = 100;
+        if (lp < -100)
+            lp = -100;
+        if (rp > 100)
+            rp = 100;
+        if (rp < -100)
+            rp = -100;
 
         if (BT_read_colour_RGBraw_NXT(COLOUR_PORT, &R, &G, &B, &A) == 1)
         {
-            c = classify_colour(R, G, B, A);
+            int c = classify_colour(R, G, B, A);
 
-            // Found red, stop and return
             if (c == RED)
             {
                 BT_all_stop(1);
-                return (RED);
+                return RED;
+            }
+
+            if (stopAtColour != 0)
+            {
+                if (c == stopAtColour)
+                {
+                    BT_all_stop(1);
+                    return stopAtColour;
+                }
+                else
+                    colour_hits = 0;
+            }
+        }
+        else
+        {
+            colour_hits = 0;
+        }
+
+        if (stayOnStreet)
+        {
+            int street = isOnStreet();
+
+            if (street == 0)
+            {
+                fprintf(stderr, "Off the street, recovering...\n");
+                BT_all_stop(1);
+
+                // Search for the street, and rotate such that we face more towards it
+                if (!locateAndTurnToStreet())
+                    continue;
+
+                fprintf(stderr, "We found the street again ...\n");
+
+                // Reset gyro and accumulated integral
+                if (BT_read_gyro(GYRO_PORT, 1, &angle, &rate) != 1)
+                {
+                    BT_all_stop(1);
+                    return -1;
+                }
+
+                integral = 0;
+
+                // // Drive a bit forward to get back onto the street
+                // drive_straight_pid(100, direction);
+                continue;
             }
         }
 
-        // TODO: Make sure this logic is sound
-        // Continue only if we need to stop at a colour (see mapping)
-        if (stop_at_colour != 0)
-        {
-            if (c == stop_at_colour)
-                colour_hits++;
-            else
-                colour_hits = 0;
-            if (colour_hits >= 2)
-            {
-                BT_all_stop(1);
-                return (stop_at_colour);
-            }
-        }
+        BT_turn(LEFT_MOTOR, lp, RIGHT_MOTOR, rp);
         usleep(10000);
     }
-    BT_all_stop(1);
-    return (0);
 }
 
 //******************   Sliding sensor mechanism *******************//
@@ -550,7 +819,6 @@ int scan_right(int us)
     int color = read_colour_still();
     return color;
 }
-
 // Positions the color sensor in the middle again
 int reset()
 {
@@ -559,10 +827,13 @@ int reset()
         BT_drive(SLIDE_MOTOR, SLIDE_MOTOR, -80);
     }
     BT_all_stop(1);
-    scan_right(2500);
+    scan_right(2000000);
+    BT_all_stop(1);
     usleep(1000000);
     return 0;
 }
+
+//****************** Main Movement Functions *******************//
 
 /*
 
@@ -582,13 +853,24 @@ int find_street(void)
      * bot after calling this function
      */
 
+    int c = read_colour_still();
+    usleep(1000000);
+    if (c == BLACK || c == YELLOW)
+    {
+        fprintf(stderr, "We are already on the road, skipping find street process ...\n");
+        BT_all_stop(1);
+        return 1;
+    }
+
     // Drive till we find a street
-    int status = drive_straight_pid(15000, BLACK, 1);
+    int status = driveStraightOnLinePID(BLACK, 0, 1);
 
     // Found a road, turn onto the road
     if (status == BLACK)
     {
-        turn_by_gyro(90);
+        fprintf(stderr, "We found a road, turning right onto the road ...\n");
+        centerRobotOnRoad();
+        turnRight();
         return 1;
     }
 
@@ -596,14 +878,18 @@ int find_street(void)
     if (status == RED)
     {
 
-        drive_straight_pid(200, 0, -1);
-        turn_by_gyro(90);
+        fprintf(stderr, "We hit a wall while trying to find a street, backing up and turning right ...\n");
+        backUpRobotToIntersection();
+        centerRobotOnRoad();
+        turnRight();
 
-        status = drive_straight_pid(15000, BLACK, 1);
+        status = driveStraightOnLinePID(BLACK, 1, 1);
 
         if (status == BLACK)
         {
-            turn_by_gyro(90);
+            fprintf(stderr, "We found a road, turning right onto the road ...\n");
+            centerRobotOnRoad();
+            turnRight();
             return 1;
         }
     }
@@ -637,22 +923,26 @@ int drive_along_street(void)
 
     while (1)
     {
-        int status = drive_straight_pid(15000, YELLOW, 1);
+        int status = driveStraightOnLinePID(YELLOW, 1, 1);
 
         // We found the next intersection, return
         if (status == 4)
         {
+            fprintf(stderr, "We found the next intersection ...\n");
             return angleTurned;
         }
 
         // We hit a wall, try again next loop
         if (status == 5)
         {
+            fprintf(stderr, "We hit a wall, returning back to intersection and turning left to try again ...\n");
+
             // Back up to the starting intersection
-            drive_straight_pid(15000, YELLOW, -1);
+            backUpRobotToIntersection();
 
             // Turn left 90 degrees and try another street
-            turn_by_gyro(-90);
+            centerRobotOnRoad();
+            turnLeft();
             angleTurned -= 90;
         }
         else
@@ -668,7 +958,7 @@ int drive_along_street(void)
 
 /*
 
-    // Scan all 4 buildings at an intersection and update respective pointers with colour mapping (read_calibrated_colour)
+    // Scan all 4 buildings at an intersection and update respective pointers with colour mapping
     // Assume we are alraedy at the intersection when running this method
     // The robot should return to the same starting location + direction after running
 
@@ -699,40 +989,72 @@ int scan_intersection(int *tl, int *tr, int *br, int *bl)
      * after this call.
      */
 
+    fprintf(stderr, "Starting intersection scan ...\n");
+
+    // Return invalid colour values, and a zero to indicate failure (you will replace this with your code)
     int color = read_colour_still();
     if (color == 4)
     {
-        drive_straight_pid(1000000, 0, 1);
-
+        // drive forward
+        BT_drive(RIGHT_MOTOR, LEFT_MOTOR, 30);
+        usleep(450000);
+        BT_all_stop(1);
+        // Scan left and right
+        *(tr) = scan_right(2900000);
         usleep(1000000); // sleep for 1 second
-        *(tr) = scan_right(3000000);
-        usleep(1000000); // sleep for 1 second
-
-        if (scan_left(3000000) != 1)
-        {
-            reset();
-        }
-
-        *(tl) = scan_left(3000000);
-        reset();
-
-        usleep(1000000); // sleep for 1 second
-        drive_straight_pid(1000000, 0, -1);
+        scan_left(2900000);
         usleep(1000000); // sleep for 1 second
 
-        *(br) = scan_right(3000000);
+        turn_by_gyro(-15);
+
+        *(tl) = scan_left(2200000);
+        // reset();
+        scan_right(2200000);
         usleep(1000000); // sleep for 1 second
 
-        if (scan_left(3000000) != 1)
-        {
-            reset();
-        }
+        turn_by_gyro(15);
 
-        *(bl) = scan_left(3000000);
-        reset();
+        // Back to intersection
+        BT_drive(RIGHT_MOTOR, LEFT_MOTOR, -30);
+        usleep(450000);
+        BT_all_stop(1);
+
+        // drive back
+        BT_drive(RIGHT_MOTOR, LEFT_MOTOR, -30);
+        usleep(350000);
+        BT_all_stop(1);
+        usleep(1000000); // sleep for 1 second
+
+        // scan back right
+        *(br) = scan_right(2900000);
+        usleep(1000000); // sleep for 1 second
+        scan_left(2900000);
+
+        usleep(1000000); // sleep for 1 second
+
+        // scan  back left
+        turn_by_gyro(-15);
+        *(bl) = scan_left(2200000);
+        scan_right(2200000);
         usleep(1000000);
+        turn_by_gyro(15);
 
+        // drive back to intersection
+        BT_drive(RIGHT_MOTOR, LEFT_MOTOR, 30);
+        usleep(350000);
+        BT_all_stop(1);
+
+        fprintf(stderr,
+                "Intersection scanned: TL=%s, TR=%s, BR=%s, BL=%s\n",
+                getColourName(*tl),
+                getColourName(*tr),
+                getColourName(*br),
+                getColourName(*bl));
         return 1;
+    }
+    else
+    {
+        fprintf(stderr, "Robot is not on a yellow intersection, scan failed ...\n");
     }
 }
 
@@ -806,21 +1128,24 @@ int robot_localization(int *robot_x, int *robot_y, int *direction)
         // Drive to the next intersection available
         int angleRotated = drive_along_street();
 
-        shiftBeliefs(numIntersections);
-
         if (angleRotated)
         {
             // Rotate belief values by angleRotated if the robot has changed direction while driving
             rotate_beliefs(numIntersections, angleRotated);
         }
 
+        shiftBeliefs(numIntersections);
+
         // Scan all 4 colours on the intersection
-        scan_intersection(&topLeft, &topRight, &backRight, &backLeft);
+        int c = scan_intersection(&topLeft, &topRight, &backRight, &backLeft);
+        fprintf(stderr, "we got to here %d \n", c);
 
         // Update beliefs based on values from scanned intersections
         update_beliefs_based_on_intersection(numIntersections, topLeft, topRight, backRight, backLeft);
 
+        printf("we got to here 2\n");
         normalize_beliefs(numIntersections);
+        printBeliefs();
 
         double highestBelief = get_highest_belief_coords(numIntersections, robot_x, robot_y, direction);
         // Return when we obtain a belief higher than BELIEF_THRESHOLD. This will be our localized coordinates/direction
@@ -830,6 +1155,8 @@ int robot_localization(int *robot_x, int *robot_y, int *direction)
             return 1;
         }
 
+        // Drive forwards a bit to not scan the same intersection again
+        centerRobotOnRoad();
         // Repeat
     }
 
@@ -856,9 +1183,7 @@ int go_to_target(int robot_x, int robot_y, int direction, int target_x, int targ
      * Return values: 1 if successful (the bot reached its target destination), 0 otherwise
      */
 
-    /************************************************************************************************************************
-     *   TO DO  -   Complete this function
-     ***********************************************************************************************************************/
+    fprintf(stderr, "Navigating from (%d, %d) to (%d, %d)\n", robot_x, robot_y, target_x, target_y);
 
     // Align x coord
     while (robot_x != target_x)
@@ -868,19 +1193,26 @@ int go_to_target(int robot_x, int robot_y, int direction, int target_x, int targ
         // Turn left/right
         if (target_x > robot_x)
         {
+            fprintf(stderr, "Turning to face Left ...\n");
             target_direction = 1;
         }
         else
         {
+            fprintf(stderr, "Turning to face Right ...\n");
             target_direction = 3;
         }
 
         // Turn and drive to the next intersection
+        centerRobotOnRoad();
         turnToDirection(&direction, target_direction);
+
+        fprintf(stderr, "Moving horizontally toward x=%d\n", target_x);
         drive_along_street();
 
         // Update current x coord
         robot_x += (target_x > robot_x) ? 1 : -1;
+
+        fprintf(stderr, "Current position: (%d, %d)\n", robot_x, robot_y);
     }
 
     // Align y coord
@@ -891,21 +1223,29 @@ int go_to_target(int robot_x, int robot_y, int direction, int target_x, int targ
         // Turn up/down
         if (target_y > robot_y)
         {
+            fprintf(stderr, "Turning to face Down ...\n");
             target_direction = 2;
         }
         else
         {
+            fprintf(stderr, "Turning to face Up ...\n");
             target_direction = 0;
         }
 
         // Turn and drive to the next intersection
+        centerRobotOnRoad();
         turnToDirection(&direction, target_direction);
+
+        fprintf(stderr, "Moving vertically toward y=%d\n", target_y);
         drive_along_street();
 
         // Update current y coord
         robot_y += (target_y > robot_y) ? 1 : -1;
+
+        fprintf(stderr, "Current position: (%d, %d)\n", robot_x, robot_y);
     }
 
+    fprintf(stderr, "Arrived at target (%d, %d)\n", robot_x, robot_y);
     return 1;
 }
 
@@ -1223,7 +1563,6 @@ unsigned char *readPPMimage(const char *filename, int *rx, int *ry)
     return (im);
 }
 
-// Helper function to load calibrated colour data from
 int load_calibration(const char *filename, Calibration calibration[])
 {
     FILE *file = fopen(filename, "r");
@@ -1241,11 +1580,12 @@ int load_calibration(const char *filename, Calibration calibration[])
     while (count < NUM_COLOURS &&
            fgets(line, sizeof(line), file) != NULL)
     {
-        if (sscanf(line, "%15[^,],%lf,%lf,%lf",
+        if (sscanf(line, "%15[^,],%lf,%lf,%lf,%lf",
                    calibration[count].name,
                    &calibration[count].red,
                    &calibration[count].green,
-                   &calibration[count].blue) == 4)
+                   &calibration[count].blue,
+                   &calibration[count].ambient) == 5)
         {
             count++;
         }
@@ -1266,48 +1606,93 @@ int load_calibration(const char *filename, Calibration calibration[])
 //  6    White
 int read_calibrated_colour(Calibration calibration[])
 {
-    int rgb[3];
-    BT_read_colour_sensor_RGB(COLOUR_PORT, rgb);
+    int R[STILL_SAMPLES], G[STILL_SAMPLES], B[STILL_SAMPLES], A[STILL_SAMPLES];
+    int counts[7] = {0};
+    int r, g, b, a;
+    int k = 0;
 
-    double minDistance = -1;
-    int closestColour = 0;
-
-    for (int i = 0; i < NUM_COLOURS; i++)
+    for (int tries = 0; tries < 2 * STILL_SAMPLES && k < STILL_SAMPLES; tries++)
     {
-        // Calculate Normalized Eucliduan distance between points to compare colours and find best match
-        double sensorSum = rgb[0] + rgb[1] + rgb[2];
-        double calibratedSum = calibration[i].red + calibration[i].green + calibration[i].blue;
-
-        double dr = (double)rgb[0] / sensorSum - (double)calibration[i].red / calibratedSum;
-        double dg = (double)rgb[1] / sensorSum - (double)calibration[i].green / calibratedSum;
-        double db = (double)rgb[2] / sensorSum - (double)calibration[i].blue / calibratedSum;
-
-        double distance = dr * dr + dg * dg + db * db;
-
-        int colour = 0;
-        if (strcmp(calibration[i].name, "Black") == 0)
-            colour = 1;
-        else if (strcmp(calibration[i].name, "Blue") == 0)
-            colour = 2;
-        else if (strcmp(calibration[i].name, "Green") == 0)
-            colour = 3;
-        else if (strcmp(calibration[i].name, "Yellow") == 0)
-            colour = 4;
-        else if (strcmp(calibration[i].name, "Red") == 0)
-            colour = 5;
-        else if (strcmp(calibration[i].name, "White") == 0)
-            colour = 6;
-        else
-            continue;
-
-        if (minDistance < 0 || distance < minDistance)
+        if (BT_read_colour_RGBraw_NXT(COLOUR_PORT, &r, &g, &b, &a) == 1)
         {
-            minDistance = distance;
-            closestColour = colour;
+            R[k] = r;
+            G[k] = g;
+            B[k] = b;
+            A[k] = a;
+            k++;
         }
     }
 
-    return closestColour;
+    if (k < 3)
+    {
+        return 0;
+    }
+
+    for (int i = 0; i < k; i++)
+    {
+        int rgb[3] = {R[i], G[i], B[i]};
+        double minDistance = -1;
+        int closestColour = 0;
+
+        for (int j = 0; j < NUM_COLOURS; j++)
+        {
+            // Calculate Normalized Eucliduan distance between points to compare colours and find best match
+            double sensorSum = rgb[0] + rgb[1] + rgb[2];
+            double calibratedSum = calibration[j].red + calibration[j].green + calibration[j].blue;
+
+            if (sensorSum == 0 || calibratedSum == 0)
+            {
+                continue;
+            }
+
+            double dr = (double)rgb[0] / sensorSum - calibration[j].red / calibratedSum;
+            double dg = (double)rgb[1] / sensorSum - calibration[j].green / calibratedSum;
+            double db = (double)rgb[2] / sensorSum - calibration[j].blue / calibratedSum;
+
+            double ambientDifference = (double)A[i] - calibration[j].ambient;
+
+            double distance = dr * dr + dg * dg + db * db + AMBIENT_WEIGHT * ambientDifference * ambientDifference;
+
+            int colour = 0;
+            if (strcmp(calibration[j].name, "Black") == 0)
+                colour = BLACK;
+            else if (strcmp(calibration[j].name, "Blue") == 0)
+                colour = BLUE;
+            else if (strcmp(calibration[j].name, "Green") == 0)
+                colour = GREEN;
+            else if (strcmp(calibration[j].name, "Yellow") == 0)
+                colour = YELLOW;
+            else if (strcmp(calibration[j].name, "Red") == 0)
+                colour = RED;
+            else if (strcmp(calibration[j].name, "White") == 0)
+                colour = WHITE;
+            else
+                continue;
+
+            if (minDistance < 0 || distance < minDistance)
+            {
+                minDistance = distance;
+                closestColour = colour;
+            }
+        }
+
+        if (closestColour != 0)
+        {
+            counts[closestColour]++;
+        }
+    }
+
+    int bestColour = 0;
+    for (int i = 1; i <= 6; i++)
+    {
+        if (counts[i] > counts[bestColour])
+        {
+            bestColour = i;
+        }
+    }
+
+    // printColourName(bestColour);
+    return bestColour;
 }
 
 // Normalize values in beliefs[400][4]. numIntersections represents sx * sy
@@ -1336,6 +1721,9 @@ void normalize_beliefs(int numIntersections)
 double get_highest_belief_coords(int numIntersections, int *robot_x, int *robot_y, int *direction)
 {
     double highest = beliefs[0][0];
+    *robot_x = 0;
+    *robot_y = 0;
+    *direction = 0;
 
     for (int i = 0; i < numIntersections; i++)
     {
@@ -1468,15 +1856,21 @@ void update_beliefs_based_on_intersection(int numIntersections, int topLeft, int
                 matches++;
             }
 
-            // If this intersection is exists and the robot is facing the right direction, increase the belief
+            // TODO: Configure these factors such that localization works in a limiited number of loops
             if (matches == 4)
             {
+                // If this intersection is exists and the robot is facing the right direction, increase the belief
                 beliefs[i][d] *= 3;
             }
             else if (matches == 3)
             {
                 // Small adjustment in case of sensor error, close enough match
                 beliefs[i][d] *= 1.2;
+            }
+            else
+            {
+                // Decrease if not matching at all
+                beliefs[i][d] /= 2;
             }
         }
     }
@@ -1495,4 +1889,51 @@ void initializeBeliefs(double beliefArray[][4])
             beliefArray[i + (j * sx)][3] = 1.0 / (double)(sx * sy * 4);
         }
     }
+}
+
+// Logging method for belief map visualization
+// Top left is Up
+// Top right is Right
+// Bottom right is Bottom
+// Bottom left is Left
+void printBeliefs(void)
+{
+    for (int y = 0; y < sy; y++)
+    {
+        for (int x = 0; x < sx; x++)
+        {
+            int i = y * sx + x;
+            printf("%8.6f %8.6f", beliefs[i][0], beliefs[i][1]);
+            if (x < sx - 1)
+                printf(" | ");
+        }
+        printf("\n");
+
+        // Print aligned cell borders
+        for (int x = 0; x < sx; x++)
+        {
+            printf("-----------------");
+            if (x < sx - 1)
+                printf("+");
+        }
+        printf("\n");
+
+        for (int x = 0; x < sx; x++)
+        {
+            int i = y * sx + x;
+            printf("%8.6f %8.6f", beliefs[i][3], beliefs[i][2]);
+            if (x < sx - 1)
+                printf(" | ");
+        }
+        printf("\n\n");
+    }
+}
+
+// Helper fn for timer
+long elapsed_ms_since(struct timespec start)
+{
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+
+    return (now.tv_sec - start.tv_sec) * 1000L + (now.tv_nsec - start.tv_nsec) / 1000000L;
 }

@@ -67,6 +67,7 @@ code that you have to complete in order to implement the localization algorithms
 #include <malloc.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>
 #include "./EV3_RobotControl/btcomm.h"
 
 #ifndef HEXKEY
@@ -80,10 +81,12 @@ code that you have to complete in order to implement the localization algorithms
 #define RIGHT_MOTOR MOTOR_C
 #define SLIDE_MOTOR MOTOR_D
 
-#define CALIBRATION_SAMPLE_COUNT 10
+#define CALIBRATION_SAMPLE_COUNT 20
 #define CALIBRATION_OUTPUT_FILE "colour_calibration.csv"
 #define NUM_COLOURS 6
+#define AMBIENT_WEIGHT 0.4
 
+// We have localized when a belief value exceeds this threshold
 #define BELIEF_THRESHOLD 0.4
 
 #define BLACK 1
@@ -99,6 +102,7 @@ typedef struct
   double red;
   double green;
   double blue;
+  double ambient;
 } Calibration;
 
 int parse_map(unsigned char *map_img, int rx, int ry);
@@ -116,13 +120,22 @@ unsigned char *readPPMimage(const char *filename, int *rx, int *ry);
  **/
 
 // Movement
-int drive_straight_pid(int max_ms, int stop_at_yellow, int direction);
+void drive(int max_ms, int direction);
+int drive_straight_pid(int max_ms, int direction);
+int driveStraightOnLinePID(int stopAtColour, int stayOnStreet, int direction);
 int turn_by_gyro(int target_deg);
 void turnLeft(void);
 void turnRight(void);
 int turnToDirection(int *direction, int target_direction);
 
+void centerRobotOnRoad();
+void backUpRobotToIntersection();
+int isOnStreet(void);
+int locateAndTurnToStreet(void);
+
 // Colour and Calibration
+int read_colour_still(void);
+void printColourName(int colour);
 int load_calibration(const char *filename, Calibration calibration[]);
 int read_calibrated_colour(Calibration calibration[]);
 void print_colour_readings(void);
@@ -134,5 +147,9 @@ double get_highest_belief_coords(int numIntersections, int *robot_x, int *robot_
 void rotate_beliefs(int numIntersections, int angle);
 void shiftBeliefs(int numIntersections);
 void update_beliefs_based_on_intersection(int numIntersections, int topLeft, int topRight, int backRight, int backLeft);
+void printBeliefs(void);
+
+// Other
+long elapsed_ms_since(struct timespec start);
 
 #endif
