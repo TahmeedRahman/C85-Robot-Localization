@@ -231,16 +231,16 @@ int main(int argc, char *argv[])
      *
      *******************************************************************************************************************************/
 
-    drive_straight_pid(15000, YELLOW, 1, 1);
-    centerRobotOnIntersection();
+    driveStraightOnLinePID(YELLOW, 1, 1);
+    centerRobotOnRoad();
     turnRight();
 
-    drive_straight_pid(15000, YELLOW, 1, 1);
-    centerRobotOnIntersection();
+    driveStraightOnLinePID(YELLOW, 1, 1);
+    centerRobotOnRoad();
     turnRight();
 
-    drive_straight_pid(15000, YELLOW, 1, 1);
-    centerRobotOnIntersection();
+    driveStraightOnLinePID(YELLOW, 1, 1);
+    centerRobotOnRoad();
     turnRight();
 
     exit(0);
@@ -402,6 +402,8 @@ int turnToDirection(int *direction, int target_direction)
         angle += 360;
     }
 
+    turn_by_gyro(angle);
+
     *direction = target_direction;
     return 1;
 }
@@ -417,210 +419,89 @@ void drive(int max_ms, int direction)
     BT_all_stop(1);
 }
 
-void centerRobotOnIntersection()
+// Assume the robot's sensor is currently on the desired section of road/intersection (yellow/black)
+// Drive such that the robot is centered, allowing for turning
+void centerRobotOnRoad()
 {
-    drive_straight_pid(1000, 0, 1, 1);
+    drive_straight_pid(1000, 1);
 }
 
-/*
- * PID Controller
- *
- * - Stops motors and resets gyro heading before starting
- * - If stop_at_colour is enabled, stops at the first instance of the colour (See mapping) and return 4 (only after two consecutive readings)
- * - direction = 1 to drive fowards, direction = -1 to drive backwards
- *
- * - Stops and returns 5 if red is detected
- * - Stops and returns 0 if the time limit is reached
- */
-// int drive_straight_pid(int max_ms, int stop_at_colour, int direction)
-// {
-//     int angle = 0, rate = 0, R, G, B, A;
-//     int colour_hits = 0;
-//     double integral = 0, u;
-//     int lp, rp;
-//     int max_loops = max_ms / LOOP_MS;
-//     int base = direction * BASE_POWER;
-//     int c;
-
-//     BT_all_stop(0);
-//     usleep(500000);
-//     if (BT_read_gyro(GYRO_PORT, 1, &angle, &rate) != 1)
-//         return (-1); // reset heading to 0
-
-//     for (int loops = 0; loops < max_loops; loops++)
-//     {
-//         if (BT_read_gyro(GYRO_PORT, 0, &angle, &rate) != 1)
-//         {
-//             BT_all_stop(1);
-//             return (-1);
-//         }
-
-//         double err = GYRO_SIGN * angle;
-//         integral += err;
-//         if (integral > I_LIMIT)
-//             integral = I_LIMIT;
-//         if (integral < -I_LIMIT)
-//             integral = -I_LIMIT;
-
-//         u = KP * err + KI * integral + KD * GYRO_SIGN * rate;
-//         lp = (int)(base - u);
-//         rp = (int)(base + u);
-//         if (lp > 100)
-//             lp = 100;
-//         if (lp < -100)
-//             lp = -100;
-//         if (rp > 100)
-//             rp = 100;
-//         if (rp < -100)
-//             rp = -100;
-//         printf("Base Power: %d, lp: %d, rp: %d\n", base, lp, rp);
-//         BT_turn(LEFT_MOTOR, lp, RIGHT_MOTOR, rp);
-
-//         if (BT_read_colour_RGBraw_NXT(COLOUR_PORT, &R, &G, &B, &A) == 1)
-//         {
-//             c = classify_colour(R, G, B, A);
-
-//             // Found red, stop and return
-//             if (c == RED)
-//             {
-//                 BT_all_stop(1);
-//                 return (RED);
-//             }
-//         }
-
-//         // Continue only if we need to stop at a colour (see mapping)
-//         if (stop_at_colour != 0)
-//         {
-//             if (c == stop_at_colour)
-//                 colour_hits++;
-//             else
-//                 colour_hits = 0;
-//             if (colour_hits >= 2)
-//             {
-//                 BT_all_stop(1);
-//                 return (stop_at_colour);
-//             }
-//         }
-//         usleep(10000);
-//     }
-//     BT_all_stop(1);
-//     return (0);
-// }
-
-#define STREET_SEARCH_POWER 20
-#define STREET_SEARCH_MS 250
-#define STREET_ALIGN_MS 150
-
-// Return elapsed milliseconds since start
-static long elapsed_ms_since(struct timespec start)
+// Assume the robot's sensor is currently on the wall (red)
+void backUpRobotToIntersection()
 {
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-
-    return (now.tv_sec - start.tv_sec) * 1000L + (now.tv_nsec - start.tv_nsec) / 1000000L;
+    driveStraightOnLinePID(YELLOW, -1, 1);
 }
 
-// Return 1 if the sensor detects black or yellow, otherwise 0
-static int is_on_street(void)
+// Return 1 if the sensor detects black or yellow (on a street)
+int isOnStreet(void)
 {
     int R, G, B, A;
 
-    if (BT_read_colour_RGBraw_NXT(
-            COLOUR_PORT, &R, &G, &B, &A) != 1)
+    if (BT_read_colour_RGBraw_NXT(COLOUR_PORT, &R, &G, &B, &A) != 1)
+    {
         return 0;
+    }
 
     int c = classify_colour(R, G, B, A);
 
     return (c == BLACK || c == YELLOW);
 }
 
-/*
- * Stop forward movement, search left and right for the street,
- * then turn slightly toward the direction in which it was found.
- *
- * Returns:
- *   1  = street found and alignment completed
- *   0  = time limit reached
- */
-static int recover_street(struct timespec start,
-                          int max_ms,
-                          int *search_dir)
+// Attempt to locate the street by turning x degrees to the left/right
+int locateAndTurnToStreet(void)
 {
+    int baseSearchAngle = 10;
+
     BT_all_stop(1);
 
-    struct timespec phase_start;
-    clock_gettime(CLOCK_MONOTONIC, &phase_start);
-
-    // Search by rotating left and right until the street is found
-    while (elapsed_ms_since(start) < max_ms)
+    // Turn slightly to the left to find the street
+    turn_by_gyro(-baseSearchAngle);
+    if (isOnStreet())
     {
-        BT_turn(
-            LEFT_MOTOR, -*search_dir * STREET_SEARCH_POWER,
-            RIGHT_MOTOR, *search_dir * STREET_SEARCH_POWER);
-
-        if (is_on_street())
-            break;
-
-        if (elapsed_ms_since(phase_start) >= STREET_SEARCH_MS)
-        {
-            *search_dir = -*search_dir;
-            clock_gettime(CLOCK_MONOTONIC, &phase_start);
-        }
-
-        usleep(10000);
+        return 1;
     }
 
-    BT_all_stop(1);
-
-    if (elapsed_ms_since(start) >= max_ms)
-        return 0;
-
-    // Street found: turn slightly further in the same direction
-    struct timespec align_start;
-    clock_gettime(CLOCK_MONOTONIC, &align_start);
-
-    while (elapsed_ms_since(align_start) < STREET_ALIGN_MS &&
-           elapsed_ms_since(start) < max_ms)
+    // Turn slightly to the right to find the street
+    turn_by_gyro(2 * baseSearchAngle);
+    if (isOnStreet())
     {
-        BT_turn(
-            LEFT_MOTOR, -*search_dir * STREET_SEARCH_POWER,
-            RIGHT_MOTOR, *search_dir * STREET_SEARCH_POWER);
-
-        usleep(10000);
+        return 1;
     }
 
-    BT_all_stop(1);
+    // Turn more to the left to find the street
+    turn_by_gyro(-3 * baseSearchAngle);
+    if (isOnStreet())
+    {
+        return 1;
+    }
 
-    if (elapsed_ms_since(start) >= max_ms)
-        return 0;
+    // Turn more to the right to find the street
+    turn_by_gyro(4 * baseSearchAngle);
+    if (isOnStreet())
+    {
+        return 1;
+    }
 
-    return 1;
+    fprintf(stderr, "Could not locate street within +/- %d degrees of the initial heading\n", 2 * baseSearchAngle);
+    return 0;
 }
 
 /*
  * PID Controller
  *
- * - Stops motors and resets gyro heading before starting
- * - If stop_at_colour is enabled, stops at the first instance of the colour (See mapping) and return 4 (only after two consecutive readings)
+ * - Use this controller for driving in a straight line for x amount of time (good for small shifts in alignment)
  * - direction = 1 to drive fowards, direction = -1 to drive backwards
+ * - No line following or colour detection logic
  *
- * - Stops and returns 5 if red is detected
- * - Stops and returns 0 if the time limit is reached
  */
-int drive_straight_pid(int max_ms, int stop_at_colour, int direction, int stayonStreet)
+int drive_straight_pid(int max_ms, int direction)
 {
     int angle = 0, rate = 0;
-    int R, G, B, A;
-    int c;
-    int colour_hits = 0;
-    int search_dir = -1;
-
     double integral = 0, u;
     int lp, rp;
     int base = direction * BASE_POWER;
 
     struct timespec start;
-
     BT_all_stop(0);
     usleep(500000);
 
@@ -662,26 +543,88 @@ int drive_straight_pid(int max_ms, int stop_at_colour, int direction, int stayon
         if (rp < -100)
             rp = -100;
 
-        // Read colour once and use the same reading for all checks
-        int colour_read_ok =
-            BT_read_colour_RGBraw_NXT(
-                COLOUR_PORT, &R, &G, &B, &A) == 1;
+        BT_turn(LEFT_MOTOR, lp, RIGHT_MOTOR, rp);
+        usleep(10000);
+    }
 
-        if (colour_read_ok)
+    BT_all_stop(1);
+    return 0;
+}
+
+/*
+ * PID Controller
+ *
+ * - Use this controller for driving along lines (drive until we reach a certain point)
+ * - If stop_at_colour is enabled, stops at the first instance of the colour (See mapping) and return 4 (only after two consecutive readings)
+ * - If stayOnStreet is enabled, attempt to relocate the street *yellow/black) if we leave it
+ * - direction = 1 to drive fowards, direction = -1 to drive backwards
+ * - Drives infefinitely until we reach x colour or a wall (red)
+ *
+ * - Stops and returns 5 if red is detected
+ * - Stops and returns 0 if the time limit is reached
+ */
+int driveStraightOnLinePID(int stopAtColour, int stayOnStreet, int direction)
+{
+    int angle = 0, rate = 0;
+    int R, G, B, A;
+    int colour_hits = 0;
+    int search_dir = -1;
+    double integral = 0, u;
+    int lp, rp;
+    int base = direction * BASE_POWER;
+
+    BT_all_stop(0);
+    usleep(500000);
+
+    if (BT_read_gyro(GYRO_PORT, 1, &angle, &rate) != 1)
+    {
+        BT_all_stop(1);
+        return -1;
+    }
+
+    while (1)
+    {
+        if (BT_read_gyro(GYRO_PORT, 0, &angle, &rate) != 1)
         {
-            c = classify_colour(R, G, B, A);
+            BT_all_stop(1);
+            return -1;
+        }
 
-            // Red always stops immediately
+        double err = GYRO_SIGN * angle;
+
+        integral += err;
+        if (integral > I_LIMIT)
+            integral = I_LIMIT;
+        if (integral < -I_LIMIT)
+            integral = -I_LIMIT;
+
+        u = KP * err + KI * integral + KD * GYRO_SIGN * rate;
+
+        lp = (int)(base - u);
+        rp = (int)(base + u);
+
+        if (lp > 100)
+            lp = 100;
+        if (lp < -100)
+            lp = -100;
+        if (rp > 100)
+            rp = 100;
+        if (rp < -100)
+            rp = -100;
+
+        if (BT_read_colour_RGBraw_NXT(COLOUR_PORT, &R, &G, &B, &A) == 1)
+        {
+            int c = classify_colour(R, G, B, A);
+
             if (c == RED)
             {
                 BT_all_stop(1);
                 return RED;
             }
 
-            // Optional target-colour stopping
-            if (stop_at_colour != 0)
+            if (stopAtColour != 0)
             {
-                if (c == stop_at_colour)
+                if (c == stopAtColour)
                     colour_hits++;
                 else
                     colour_hits = 0;
@@ -689,43 +632,47 @@ int drive_straight_pid(int max_ms, int stop_at_colour, int direction, int stayon
                 if (colour_hits >= 2)
                 {
                     BT_all_stop(1);
-                    return stop_at_colour;
+                    return stopAtColour;
                 }
             }
         }
         else
         {
-            // A failed sensor read must not count as a colour hit
             colour_hits = 0;
         }
 
-        // Optional street detection and recovery
-        if (stayonStreet && !is_on_street())
+        if (stayOnStreet)
         {
-            int recovered = recover_street(start, max_ms, &search_dir);
+            int street = isOnStreet();
 
-            if (!recovered)
-                break;
-
-            // Re-zero the gyro after turning to face the street
-            if (BT_read_gyro(GYRO_PORT, 1, &angle, &rate) != 1)
+            if (street == 0)
             {
-                BT_all_stop(1);
-                return -1;
-            }
+                fprintf(stderr, "Off the street, recovering...\n");
 
-            integral = 0;
-            continue;
+                BT_all_stop(1);
+
+                // Search for the street, and rotate such that we face more towards it
+                if (!locateAndTurnToStreet())
+                    return -1;
+
+                // Reset gyro and accumulated integral
+                if (BT_read_gyro(GYRO_PORT, 1, &angle, &rate) != 1)
+                {
+                    BT_all_stop(1);
+                    return -1;
+                }
+
+                integral = 0;
+
+                // Drive a bit forward to get back onto the street
+                drive_straight_pid(500, direction);
+                continue;
+            }
         }
 
-        // Normal forward/backward PID movement
         BT_turn(LEFT_MOTOR, lp, RIGHT_MOTOR, rp);
-
         usleep(10000);
     }
-
-    BT_all_stop(1);
-    return 0;
 }
 
 //******************   Sliding sensor mechanism *******************//
@@ -781,12 +728,13 @@ int find_street(void)
      */
 
     // Drive till we find a street
-    int status = drive_straight_pid(15000, BLACK, 1, 0);
+    int status = driveStraightOnLinePID(BLACK, 1, 0);
 
     // Found a road, turn onto the road
     if (status == BLACK)
     {
         fprintf(stderr, "We found a road, turning right onto the road ...\n");
+        centerRobotOnRoad();
         turnRight();
         return 1;
     }
@@ -796,14 +744,16 @@ int find_street(void)
     {
 
         fprintf(stderr, "We hit a wall while trying to find a street, backing up and turning right ...\n");
-        drive_straight_pid(200, 0, -1, 1);
+        backUpRobotToIntersection();
+        centerRobotOnRoad();
         turnRight();
 
-        status = drive_straight_pid(15000, BLACK, 1, 1);
+        status = driveStraightOnLinePID(BLACK, 1, 1);
 
         if (status == BLACK)
         {
             fprintf(stderr, "We found a road, turning right onto the road ...\n");
+            centerRobotOnRoad();
             turnRight();
             return 1;
         }
@@ -838,7 +788,7 @@ int drive_along_street(void)
 
     while (1)
     {
-        int status = drive_straight_pid(15000, YELLOW, 1, 1);
+        int status = driveStraightOnLinePID(YELLOW, 1, 1);
 
         // We found the next intersection, return
         if (status == 4)
@@ -853,9 +803,10 @@ int drive_along_street(void)
             fprintf(stderr, "We hit a wall, returning back to intersection and turning left to try again ...\n");
 
             // Back up to the starting intersection
-            drive_straight_pid(15000, YELLOW, -1, 1);
+            backUpRobotToIntersection();
 
             // Turn left 90 degrees and try another street
+            centerRobotOnRoad();
             turnLeft();
             angleTurned -= 90;
         }
@@ -1805,4 +1756,13 @@ void printBeliefs(void)
         }
         printf("\n\n");
     }
+}
+
+// Helper fn for timer
+long elapsed_ms_since(struct timespec start)
+{
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+
+    return (now.tv_sec - start.tv_sec) * 1000L + (now.tv_nsec - start.tv_nsec) / 1000000L;
 }

@@ -121,12 +121,17 @@ unsigned char *readPPMimage(const char *filename, int *rx, int *ry);
 
 // Movement
 void drive(int max_ms, int direction);
-int drive_straight_pid(int max_ms, int stop_at_colour, int direction, int stayonStreet);
+int drive_straight_pid(int max_ms, int direction);
+int driveStraightOnLinePID(int stopAtColour, int stayOnStreet, int direction);
 int turn_by_gyro(int target_deg);
 void turnLeft(void);
 void turnRight(void);
 int turnToDirection(int *direction, int target_direction);
-void centerRobotOnIntersection();
+
+void centerRobotOnRoad();
+void backUpRobotToIntersection();
+int isOnStreet(void);
+int locateAndTurnToStreet(void);
 
 // Colour and Calibration
 void printColourName(int colour);
@@ -142,5 +147,8 @@ void rotate_beliefs(int numIntersections, int angle);
 void shiftBeliefs(int numIntersections);
 void update_beliefs_based_on_intersection(int numIntersections, int topLeft, int topRight, int backRight, int backLeft);
 void printBeliefs(void);
+
+// Other
+long elapsed_ms_since(struct timespec start);
 
 #endif
